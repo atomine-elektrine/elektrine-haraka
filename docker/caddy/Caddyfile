@@ -1,0 +1,63 @@
+{$HARAKA_DOMAIN:haraka.elektrine.com} {
+    # Automatic HTTPS with Let's Encrypt
+    # Caddy handles certificate generation and renewal automatically
+
+    # Access logs
+    log {
+        output file /var/log/caddy/access.log
+        format single_field common_log
+    }
+
+    # API endpoints
+    @api path /api/*
+    handle @api {
+        reverse_proxy haraka-outbound:8080 {
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    # Status/health endpoints restricted by CIDR
+    @ops_allowed {
+        path /status /healthz
+        remote_ip {$OPS_ALLOWED_CIDRS:127.0.0.1/32 ::1/128}
+    }
+
+    @ops path /status /healthz
+
+    handle @ops_allowed {
+        reverse_proxy haraka-outbound:8080 {
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    handle @ops {
+        respond "Forbidden" 403
+    }
+
+    # Metrics endpoint restricted by CIDR
+    @metrics_allowed {
+        path /metrics
+        remote_ip {$METRICS_ALLOWED_CIDRS:127.0.0.1/32 ::1/128}
+    }
+
+    handle @metrics_allowed {
+        reverse_proxy haraka-outbound:8080 {
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    handle /metrics {
+        respond "Forbidden" 403
+    }
+
+    # Default response for other paths
+    respond "elektrine-haraka Email Server" 404
+}
+
+# HTTP redirect (automatic)
+http://{$HARAKA_DOMAIN:haraka.elektrine.com} {
+    redir https://{host}{uri} permanent
+}

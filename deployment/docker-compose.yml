@@ -1,0 +1,299 @@
+services:
+  haraka-inbound:
+    image: ghcr.io/atomine-elektrine/haraka-elektrine:${HARAKA_IMAGE_TAG:-latest}
+    # For local development, comment out image and uncomment build:
+    # build: ../
+    ports:
+      - "25:25"
+    volumes:
+      - ../logs:/app/logs
+      - ../config:/app/config
+      - ../plugins:/app/plugins:ro
+      - ../lib:/app/lib:ro
+      - ../scripts:/app/scripts:ro
+      - ssl-certs:/app/ssl
+    environment:
+      - NODE_ENV=production
+      - HARAKA_ROLE=inbound-mx
+      - HARAKA_API_KEY=${HARAKA_API_KEY:-}
+      - PHOENIX_API_KEY=${PHOENIX_API_KEY:-}
+      - PHOENIX_WEBHOOK_URL=${PHOENIX_WEBHOOK_URL:-}
+      - PHOENIX_VERIFY_URL=${PHOENIX_VERIFY_URL:-}
+      - PHOENIX_DOMAINS_URL=${PHOENIX_DOMAINS_URL:-}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - ELEKTRINE_QUEUE_NAME=${ELEKTRINE_QUEUE_NAME:-elektrine:inbound}
+      - ELEKTRINE_DLQ_NAME=${ELEKTRINE_DLQ_NAME:-elektrine:inbound:dlq}
+      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-haraka.elektrine.com}
+    restart: unless-stopped
+    networks:
+      - haraka-network
+    depends_on:
+      - redis
+      - clamav
+      - spamassassin
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '2.0'
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "25"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  haraka-submission:
+    image: ghcr.io/atomine-elektrine/haraka-elektrine:${HARAKA_IMAGE_TAG:-latest}
+    ports:
+      - "587:587"
+    volumes:
+      - ../logs:/app/logs
+      - ../config:/app/config
+      - ../plugins:/app/plugins:ro
+      - ../lib:/app/lib:ro
+      - ../scripts:/app/scripts:ro
+      - ssl-certs:/app/ssl
+    environment:
+      - NODE_ENV=production
+      - HARAKA_ROLE=submission
+      - HARAKA_API_KEY=${HARAKA_API_KEY:-}
+      - PHOENIX_API_KEY=${PHOENIX_API_KEY:-}
+      - PHOENIX_VERIFY_URL=${PHOENIX_VERIFY_URL:-}
+      - PHOENIX_DOMAINS_URL=${PHOENIX_DOMAINS_URL:-}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-haraka.elektrine.com}
+    restart: unless-stopped
+    networks:
+      - haraka-network
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '1.0'
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "587"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  haraka-outbound:
+    image: ghcr.io/atomine-elektrine/haraka-elektrine:${HARAKA_IMAGE_TAG:-latest}
+    expose:
+      - "8080"
+    volumes:
+      - ../logs:/app/logs
+      - ../config:/app/config
+      - ../plugins:/app/plugins:ro
+      - ../lib:/app/lib:ro
+      - ../scripts:/app/scripts:ro
+      - ssl-certs:/app/ssl
+    environment:
+      - NODE_ENV=production
+      - HARAKA_ROLE=outbound-relay
+      - HARAKA_API_KEY=${HARAKA_API_KEY:-}
+      - PHOENIX_API_KEY=${PHOENIX_API_KEY:-}
+      - HARAKA_HTTP_API_KEY=${HARAKA_HTTP_API_KEY:-}
+      - PHOENIX_WEBHOOK_URL=${PHOENIX_WEBHOOK_URL:-}
+      - PHOENIX_VERIFY_URL=${PHOENIX_VERIFY_URL:-}
+      - PHOENIX_DOMAINS_URL=${PHOENIX_DOMAINS_URL:-}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - HARAKA_HTTP_PORT=8080
+      - HARAKA_HTTP_HOST=0.0.0.0
+      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-haraka.elektrine.com}
+    restart: unless-stopped
+    networks:
+      - haraka-network
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '1.0'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/status >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  haraka-worker:
+    image: ghcr.io/atomine-elektrine/haraka-elektrine:${HARAKA_IMAGE_TAG:-latest}
+    command: ["node", "/app/scripts/elektrine-worker.js"]
+    volumes:
+      - ../logs:/app/logs
+      - ../config:/app/config
+      - ../plugins:/app/plugins:ro
+      - ../lib:/app/lib:ro
+      - ../scripts:/app/scripts:ro
+    environment:
+      - NODE_ENV=production
+      - HARAKA_ROLE=worker
+      - HARAKA_API_KEY=${HARAKA_API_KEY:-}
+      - PHOENIX_API_KEY=${PHOENIX_API_KEY:-}
+      - PHOENIX_WEBHOOK_URL=${PHOENIX_WEBHOOK_URL:-}
+      - PHOENIX_VERIFY_URL=${PHOENIX_VERIFY_URL:-}
+      - PHOENIX_DOMAINS_URL=${PHOENIX_DOMAINS_URL:-}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - ELEKTRINE_QUEUE_NAME=${ELEKTRINE_QUEUE_NAME:-elektrine:inbound}
+      - ELEKTRINE_DLQ_NAME=${ELEKTRINE_DLQ_NAME:-elektrine:inbound:dlq}
+      - WEBHOOK_MAX_RETRIES=${WEBHOOK_MAX_RETRIES:-5}
+      - WEBHOOK_RETRY_BASE_MS=${WEBHOOK_RETRY_BASE_MS:-1000}
+    restart: unless-stopped
+    networks:
+      - haraka-network
+    depends_on:
+      - redis
+
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2-alpine}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../logs/caddy:/var/log/caddy
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-haraka.elektrine.com}
+      - "METRICS_ALLOWED_CIDRS=${METRICS_ALLOWED_CIDRS:-127.0.0.1/32 ::1/128}"
+      - "OPS_ALLOWED_CIDRS=${OPS_ALLOWED_CIDRS:-127.0.0.1/32 ::1/128}"
+    restart: unless-stopped
+    networks:
+      - haraka-network
+    depends_on:
+      - haraka-outbound
+
+  cert-copier:
+    image: ${CERT_COPIER_IMAGE:-alpine:3.20}
+    volumes:
+      - caddy-data:/caddy-data:ro
+      - ssl-certs:/ssl-certs
+    environment:
+      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-haraka.elektrine.com}
+    command: >
+      sh -c "
+        while true; do
+          if [ -f /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$$HARAKA_DOMAIN/$$HARAKA_DOMAIN.crt ]; then
+            echo 'Copying SSL certificates for Haraka...'
+            cp /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$$HARAKA_DOMAIN/$$HARAKA_DOMAIN.crt /ssl-certs/cert.crt
+            cp /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$$HARAKA_DOMAIN/$$HARAKA_DOMAIN.key /ssl-certs/cert.key
+            chown 1000:1000 /ssl-certs/cert.crt /ssl-certs/cert.key || true
+            chmod 644 /ssl-certs/cert.crt
+            chmod 600 /ssl-certs/cert.key
+            echo 'SSL certificates copied successfully'
+          fi
+          sleep 30
+        done
+      "
+    networks:
+      - haraka-network
+    depends_on:
+      - caddy
+    restart: unless-stopped
+
+  fail2ban:
+    image: ${FAIL2BAN_IMAGE:-crazymax/fail2ban:latest}
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ../docker/fail2ban/jail.d:/data/jail.d:ro
+      - ../docker/fail2ban/filter.d:/data/filter.d:ro
+      - ../logs:/opt/haraka/logs:ro
+      - ../logs/caddy:/var/log/caddy:ro
+      - /var/log:/var/log:ro
+    environment:
+      - TZ=UTC
+      - F2B_LOG_LEVEL=INFO
+      - F2B_LOG_TARGET=STDOUT
+    restart: unless-stopped
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    command:
+      - redis-server
+      - --appendonly
+      - yes
+      - --appendfsync
+      - everysec
+      - --save
+      - "900 1"
+      - --save
+      - "300 10"
+      - --save
+      - "60 10000"
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - haraka-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "PING"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  clamav:
+    image: ${CLAMAV_IMAGE:-clamav/clamav:stable}
+    ports:
+      - "127.0.0.1:3310:3310"
+    volumes:
+      - clamav-data:/var/lib/clamav
+    environment:
+      - CLAMAV_NO_FRESHCLAM=false
+    restart: unless-stopped
+    networks:
+      - haraka-network
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/clamdcheck.sh"]
+      interval: 60s
+      timeout: 120s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+
+  spamassassin:
+    image: ${SPAMASSASSIN_IMAGE:-dinkel/spamassassin:latest}
+    ports:
+      - "127.0.0.1:783:783"
+    volumes:
+      - spamassassin-data:/var/lib/spamassassin
+    environment:
+      - SA_UPDATE=1
+    restart: unless-stopped
+    networks:
+      - haraka-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+networks:
+  haraka-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  caddy-data:
+  caddy-config:
+  ssl-certs:
+  clamav-data:
+  spamassassin-data:

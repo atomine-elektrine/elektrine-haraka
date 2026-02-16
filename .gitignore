@@ -1,0 +1,106 @@
+# Queue files (emails being processed)
+queue/
+spool/
+mail_spool/
+
+# Log files
+log/
+logs/
+*.log
+
+# Runtime/temporary files
+*.pid
+*.tmp
+run/
+tmp/
+
+# Node.js dependencies (if any)
+node_modules/
+npm-debug.log*
+
+# SSL/TLS certificates and keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+config/tls_cert.pem
+config/tls_key.pem
+certs/
+config/etc/
+
+# Authentication files (contain passwords)
+config/smtp_users
+config/auth_flat_file_users
+config/auth_vpopmaild_users
+
+# API keys and secrets
+config/*_api.ini
+config/webhook.ini
+config/elektrine_http_api.ini
+.env
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# System files
+.DS_Store
+Thumbs.db
+
+# DKIM keys (private keys should not be in git)
+dkim/*.private
+config/dkim/*.private
+
+# Database files (if using any)
+*.db
+*.sqlite*
+
+# Testing artifacts
+test_results/
+coverage/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.directory
+.fseventsd
+.DocumentRevisions-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+
+# Haraka specific
+haraka.pid
+
+Or for minimal version:
+
+# Essential Haraka .gitignore
+
+# Never commit these
+queue/
+log/
+*.log
+*.pid
+
+# Security sensitive
+*.pem
+*.key
+*.crt
+config/smtp_users
+config/*_api.ini
+config/etc/
+.env
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Backups
+*.bak
+*~

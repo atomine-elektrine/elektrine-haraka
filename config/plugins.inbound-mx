@@ -1,0 +1,27 @@
+# Haraka role profile: inbound-mx
+# Accept internet mail for local domains, run anti-abuse checks,
+# then enqueue for async webhook processing.
+
+toobusy
+redis
+access
+fcrdns
+dns-list
+
+early_talker
+helo.checks
+tls
+
+mail_from.is_resolvable
+spf
+elektrine_spf_enforcer
+
+elektrine_rcpt_verify
+
+attachment
+uribl
+clamd
+spamassassin
+dkim
+
+elektrine_async_queue

@@ -1,0 +1,17 @@
+{
+  "name": "elektrine-haraka",
+  "description": "Elektrine SMTP Server - Haraka with custom plugins for email processing",
+  "version": "1.0.0",
+  "dependencies": {
+    "haraka-plugin-dkim": "^1.0.11",
+    "haraka-plugin-spf": "^1.2.10",
+    "iconv": "^3.0.1",
+    "mailparser": "^3.7.4",
+    "redis": "^4.7.0"
+  },
+  "scripts": {
+    "worker": "node ./scripts/elektrine-worker.js"
+  },
+  "repository": "",
+  "license": "MIT"
+}

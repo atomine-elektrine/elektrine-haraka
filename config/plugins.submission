@@ -1,0 +1,15 @@
+# Haraka role profile: submission
+# Accept authenticated client mail on 587 and relay via native Haraka outbound.
+
+toobusy
+redis
+access
+elektrine_local_mx
+tls
+auth/auth_proxy
+
+mail_from.is_resolvable
+spf
+dkim
+
+elektrine_rcpt_verify

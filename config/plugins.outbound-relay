@@ -1,0 +1,10 @@
+# Haraka role profile: outbound-relay
+# Expose HTTP send API and perform outbound handoff/signing.
+
+toobusy
+redis
+elektrine_local_mx
+tls
+dkim
+
+elektrine_http_api

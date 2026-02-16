@@ -1,0 +1,133 @@
+name: "CI: Build, Publish, and Deploy"
+
+on:
+  push:
+    branches:
+      - master
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-publish-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=,format=long
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    needs: build-and-publish-image
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+            if [ -z "$DEPLOY_PATH" ]; then
+              echo "::error::DEPLOY_PATH secret is empty."
+              exit 1
+            fi
+            if [ ! -d "$DEPLOY_PATH" ]; then
+              echo "::error::DEPLOY_PATH does not exist on server: $DEPLOY_PATH"
+              exit 1
+            fi
+            cd "$DEPLOY_PATH"
+            if [ ! -f docker-compose.yml ] && [ ! -f docker-compose.yaml ] && [ ! -f compose.yml ] && [ ! -f compose.yaml ]; then
+              echo "::error::No docker compose file found in $DEPLOY_PATH"
+              ls -la
+              exit 1
+            fi
+            if docker info >/dev/null 2>&1; then
+              compose() { docker compose "$@"; }
+              docker_cmd() { docker "$@"; }
+            elif sudo -n docker info >/dev/null 2>&1; then
+              compose() { sudo docker compose "$@"; }
+              docker_cmd() { sudo docker "$@"; }
+            else
+              echo "::error::DEPLOY_USER cannot access Docker daemon."
+              echo "::error::Fix by adding the user to the docker group, or allow passwordless sudo for docker."
+              id
+              groups
+              ls -l /var/run/docker.sock || true
+              exit 1
+            fi
+
+            GHCR_USER="${{ secrets.GHCR_USERNAME }}"
+            GHCR_PAT="${{ secrets.GHCR_TOKEN }}"
+            if [ -z "$GHCR_USER" ]; then GHCR_USER="${{ github.actor }}"; fi
+            if [ -z "$GHCR_PAT" ]; then GHCR_PAT="${{ secrets.GITHUB_TOKEN }}"; fi
+
+            if [ -z "$GHCR_USER" ] || [ -z "$GHCR_PAT" ]; then
+              echo "::error::No GHCR credentials available. Set GHCR_USERNAME/GHCR_TOKEN secrets, or allow GITHUB_TOKEN package read access."
+              exit 1
+            fi
+
+            echo "$GHCR_PAT" | docker_cmd login ghcr.io -u "$GHCR_USER" --password-stdin
+
+            AVAILABLE_SERVICES="$(compose config --services)"
+            echo "Detected compose services:"
+            echo "$AVAILABLE_SERVICES"
+
+            SERVICES=""
+            for svc in haraka-inbound haraka-submission haraka-outbound haraka-worker caddy cert-copier fail2ban; do
+              if echo "$AVAILABLE_SERVICES" | grep -qx "$svc"; then
+                SERVICES="$SERVICES $svc"
+              fi
+            done
+
+            # Backward compatibility for older single-service compose files.
+            for legacy in haraka; do
+              if echo "$AVAILABLE_SERVICES" | grep -qx "$legacy"; then
+                SERVICES="$SERVICES $legacy"
+              fi
+            done
+
+            SERVICES="$(echo "$SERVICES" | xargs)"
+            if [ -z "$SERVICES" ]; then
+              echo "::error::No known Haraka services found in compose file."
+              exit 1
+            fi
+
+            echo "Deploying services: $SERVICES"
+            HARAKA_IMAGE_TAG="${{ github.sha }}" compose pull $SERVICES
+            HARAKA_IMAGE_TAG="${{ github.sha }}" compose up -d $SERVICES

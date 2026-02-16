@@ -1,0 +1,3 @@
+# Whitelist trusted IPs/networks (one per line)
+# Example: 192.168.1.0/24
+# Example: 10.0.0.5

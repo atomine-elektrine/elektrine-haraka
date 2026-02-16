@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log*
+.git
+.gitignore
+README
+docs/
+logs/
+ansible/
+nginx/
+*.md
+.DS_Store
+Thumbs.db

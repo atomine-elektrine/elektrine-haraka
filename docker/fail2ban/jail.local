@@ -1,0 +1,45 @@
+[DEFAULT]
+# Ban IPs for 1 hour
+bantime = 3600
+
+# Check for attacks over 10 minutes  
+findtime = 600
+
+# Ban after 5 attempts
+maxretry = 5
+
+# Use iptables for bans
+banaction = iptables-multiport
+
+[sshd]
+enabled = true
+
+[nginx-http-auth]
+enabled = false
+port = http,https
+logpath = /var/log/nginx/error.log
+
+[nginx-limit-req]
+enabled = false
+port = http,https  
+logpath = /var/log/nginx/error.log
+maxretry = 10
+
+# Custom: SMTP brute force protection
+[haraka-smtp]
+enabled = true
+port = smtp,submission
+logpath = /opt/haraka/logs/haraka-*.log
+filter = haraka-smtp
+maxretry = 3
+bantime = 7200  # 2 hours for SMTP abuse
+
+# Custom: HTTP API abuse protection  
+[haraka-http-api]
+enabled = false
+port = http,https
+logpath = /var/log/nginx/access.log
+filter = haraka-http-api  
+maxretry = 20
+findtime = 300  # 5 minutes
+bantime = 1800  # 30 minutes

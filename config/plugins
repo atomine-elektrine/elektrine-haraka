@@ -1,0 +1,70 @@
+# Default profile for local runs (inbound-mx).
+# In container deployments, this file is overwritten at startup by
+# scripts/start-haraka.sh using config/plugins.<HARAKA_ROLE>.
+
+# status
+# process_title
+# syslog
+# watch
+
+# CONNECT
+# ----------
+toobusy
+redis
+# relay
+access
+# p0f
+# geoip
+# asn
+fcrdns
+dns-list
+
+# HELO
+# ----------
+early_talker
+helo.checks
+# Enable TLS for secure connections
+tls
+#
+# AUTH plugins require TLS before AUTH is advertised, see
+#     https://github.com/haraka/Haraka/wiki/Require-SSL-TLS
+# ----------
+# Use auth_proxy to authenticate against Phoenix app
+auth/auth_proxy
+
+# MAIL FROM
+# ----------
+mail_from.is_resolvable
+spf
+elektrine_spf_enforcer
+
+# RCPT TO
+# ----------
+# At least one rcpt_to plugin is REQUIRED for inbound email.
+# elektrine_rcpt_verify handles both local domain validation AND recipient verification
+# by querying Phoenix API for the list of valid domains (including custom domains)
+# and verifying recipients exist.
+# rcpt_to.in_host_list is no longer needed since elektrine_rcpt_verify handles all cases.
+elektrine_rcpt_verify
+# qmail-deliverable
+# rcpt_to.routes
+
+# DATA
+# ----------
+attachment
+# bounce
+# Quick checks first (reject fast)
+uribl
+# Resource-intensive checks last
+clamd
+spamassassin
+dkim
+# headers
+# limit
+# rspamd
+
+# QUEUE
+# ----------
+# queues: discard  qmail-queue  quarantine  smtp_forward  smtp_proxy
+# Inbound path: enqueue for async worker/webhook processing
+elektrine_async_queue
