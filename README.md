@@ -46,6 +46,7 @@ Optional but useful:
 - `ELEKTRINE_DLQ_NAME` (default: `elektrine:inbound:dlq`)
 - `WEBHOOK_MAX_RETRIES`
 - `WEBHOOK_RETRY_BASE_MS`
+- `HARAKA_IMAGE` (default: `ghcr.io/atomine-elektrine/elektrine-haraka`)
 - `OPS_ALLOWED_CIDRS`
 - `METRICS_ALLOWED_CIDRS`
 - `HARAKA_TRUSTED_PROXY_CIDRS`

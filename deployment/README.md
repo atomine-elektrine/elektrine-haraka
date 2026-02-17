@@ -50,3 +50,4 @@ curl -s https://your-domain/metrics
 - Submission uses native Haraka outbound delivery (no smarthost file required).
 - `/status`, `/healthz`, and `/metrics` are CIDR-restricted by Caddy (configure in `.env`).
 - Use immutable `HARAKA_IMAGE_TAG` values for reproducible rollouts.
+- Override `HARAKA_IMAGE` in `.env` if you need to pull from a different registry/repo.

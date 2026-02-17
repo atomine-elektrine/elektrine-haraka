@@ -72,11 +72,20 @@ jobs:
               exit 1
             fi
             cd "$DEPLOY_PATH"
-            if [ ! -f docker-compose.yml ] && [ ! -f docker-compose.yaml ] && [ ! -f compose.yml ] && [ ! -f compose.yaml ]; then
+            COMPOSE_BASE_FILE=""
+            for candidate in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
+              if [ -f "$candidate" ]; then
+                COMPOSE_BASE_FILE="$candidate"
+                break
+              fi
+            done
+
+            if [ -z "$COMPOSE_BASE_FILE" ]; then
               echo "::error::No docker compose file found in $DEPLOY_PATH"
               ls -la
               exit 1
             fi
+            echo "Using compose file: $COMPOSE_BASE_FILE"
             if docker info >/dev/null 2>&1; then
               compose() { docker compose "$@"; }
               docker_cmd() { docker "$@"; }
@@ -128,6 +137,49 @@ jobs:
               exit 1
             fi
 
+            TARGET_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+            TARGET_TAG="${{ github.sha }}"
+            COMPOSE_FILES="$COMPOSE_BASE_FILE"
+            OVERRIDE_FILE=""
+            HARAKA_SERVICE_FOUND=0
+
+            for svc in $SERVICES; do
+              case "$svc" in
+                haraka|haraka-*)
+                  HARAKA_SERVICE_FOUND=1
+                  ;;
+              esac
+            done
+
+            if [ "$HARAKA_SERVICE_FOUND" -eq 1 ]; then
+              OVERRIDE_FILE="$(mktemp)"
+              {
+                echo "services:"
+                for svc in $SERVICES; do
+                  case "$svc" in
+                    haraka|haraka-*)
+                      echo "  $svc:"
+                      echo "    image: ${TARGET_IMAGE}:${TARGET_TAG}"
+                      ;;
+                  esac
+                done
+              } > "$OVERRIDE_FILE"
+              COMPOSE_FILES="${COMPOSE_BASE_FILE}:${OVERRIDE_FILE}"
+              echo "Injected Haraka image override:"
+              cat "$OVERRIDE_FILE"
+            fi
+
+            echo "Resolved compose images:"
+            IMAGES_FILE="$(mktemp)"
+            if COMPOSE_FILE="$COMPOSE_FILES" compose config --images >"$IMAGES_FILE" 2>/dev/null; then
+              sed 's/^/  - /' "$IMAGES_FILE"
+              rm -f "$IMAGES_FILE"
+            else
+              rm -f "$IMAGES_FILE"
+              echo "  (docker compose version does not support 'config --images')"
+            fi
+
             echo "Deploying services: $SERVICES"
-            HARAKA_IMAGE_TAG="${{ github.sha }}" compose pull $SERVICES
-            HARAKA_IMAGE_TAG="${{ github.sha }}" compose up -d $SERVICES
+            COMPOSE_FILE="$COMPOSE_FILES" HARAKA_IMAGE_TAG="$TARGET_TAG" compose pull $SERVICES
+            COMPOSE_FILE="$COMPOSE_FILES" HARAKA_IMAGE_TAG="$TARGET_TAG" compose up -d $SERVICES
+            if [ -n "$OVERRIDE_FILE" ]; then rm -f "$OVERRIDE_FILE"; fi
