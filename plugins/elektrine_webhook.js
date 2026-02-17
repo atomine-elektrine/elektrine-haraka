@@ -146,7 +146,9 @@ exports.build_webhook_data = function(transaction, connection, parsed) {
     const to_email = text.normalize_header(parsed.to ? parsed.to.text : rcpt_to[0] || '');
     
     // Check if bounce
-    const is_bounce = bounceDetector.is_bounce(from_email, subject, text_body);
+    const is_bounce = bounceDetector.is_bounce(from_email, subject, text_body, {
+        envelope_from: mail_from
+    });
     
     // Extract spam info
     const spam_data = spamExtractor.extract(connection, transaction, parsed.headers);

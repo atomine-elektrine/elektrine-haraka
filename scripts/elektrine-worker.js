@@ -117,7 +117,9 @@ function build_webhook_data(envelope, parsed) {
         has_attachments: attachment_data.has_attachments,
         size: envelope.data_bytes,
         timestamp: new Date().toISOString(),
-        is_bounce: bounce.is_bounce(from_email, subject, text_body)
+        is_bounce: bounce.is_bounce(from_email, subject, text_body, {
+            envelope_from: mail_from
+        })
     };
 }
 

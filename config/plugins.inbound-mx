@@ -6,7 +6,9 @@ toobusy
 redis
 access
 fcrdns
-dns-list
+# Incident mitigation: DNSBL lookups can block legitimate inbound delivery.
+# Keep disabled until logs confirm blacklist false positives are resolved.
+# dns-list
 
 early_talker
 helo.checks
