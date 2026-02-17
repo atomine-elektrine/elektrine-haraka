@@ -1,6 +1,6 @@
 services:
   haraka-inbound:
-    image: ghcr.io/atomine-elektrine/haraka-elektrine:${HARAKA_IMAGE_TAG:-latest}
+    image: ghcr.io/atomine-elektrine/elektrine-haraka:${HARAKA_IMAGE_TAG:-latest}
     # For local development, comment out image and uncomment build:
     # build: ../
     ports:
@@ -49,7 +49,7 @@ services:
         max-file: "3"
 
   haraka-submission:
-    image: ghcr.io/atomine-elektrine/haraka-elektrine:${HARAKA_IMAGE_TAG:-latest}
+    image: ghcr.io/atomine-elektrine/elektrine-haraka:${HARAKA_IMAGE_TAG:-latest}
     ports:
       - "587:587"
     volumes:
@@ -86,7 +86,7 @@ services:
       start_period: 30s
 
   haraka-outbound:
-    image: ghcr.io/atomine-elektrine/haraka-elektrine:${HARAKA_IMAGE_TAG:-latest}
+    image: ghcr.io/atomine-elektrine/elektrine-haraka:${HARAKA_IMAGE_TAG:-latest}
     expose:
       - "8080"
     volumes:
@@ -127,7 +127,7 @@ services:
       start_period: 30s
 
   haraka-worker:
-    image: ghcr.io/atomine-elektrine/haraka-elektrine:${HARAKA_IMAGE_TAG:-latest}
+    image: ghcr.io/atomine-elektrine/elektrine-haraka:${HARAKA_IMAGE_TAG:-latest}
     command: ["node", "/app/scripts/elektrine-worker.js"]
     volumes:
       - ../logs:/app/logs
