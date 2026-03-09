@@ -5,7 +5,6 @@
     # Access logs
     log {
         output file /data/access.log
-        format single_field common_log
     }
 
     # API endpoints
