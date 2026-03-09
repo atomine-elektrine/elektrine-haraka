@@ -161,7 +161,6 @@ services:
       - "443:443"
     volumes:
       - ../docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../logs/caddy:/var/log/caddy
       - caddy-data:/data
       - caddy-config:/config
     environment:
@@ -209,10 +208,9 @@ services:
       - NET_ADMIN
       - NET_RAW
     volumes:
-      - ../docker/fail2ban/jail.d:/data/jail.d:ro
-      - ../docker/fail2ban/filter.d:/data/filter.d:ro
+      - ../docker/fail2ban:/data:ro
       - ../logs:/opt/haraka/logs:ro
-      - ../logs/caddy:/var/log/caddy:ro
+      - caddy-data:/caddy-data:ro
       - /var/log:/var/log:ro
     environment:
       - TZ=UTC

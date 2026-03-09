@@ -4,7 +4,7 @@
 
     # Access logs
     log {
-        output file /var/log/caddy/access.log
+        output file /data/access.log
         format single_field common_log
     }
 

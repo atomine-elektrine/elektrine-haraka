@@ -11,10 +11,37 @@ RUNTIME_CONFIG_DIR="$RUNTIME_ROOT_DIR/config"
 RUNTIME_PLUGINS_DIR="$RUNTIME_ROOT_DIR/plugins"
 RUNTIME_LIB_DIR="$RUNTIME_ROOT_DIR/lib"
 RUNTIME_NODE_MODULES_DIR="$RUNTIME_ROOT_DIR/node_modules"
+PERSISTENT_DKIM_DIR="${HARAKA_DKIM_DIR:-}"
 
 rm -rf "$RUNTIME_ROOT_DIR"
 mkdir -p "$RUNTIME_CONFIG_DIR"
 cp -R "$SOURCE_CONFIG_DIR"/. "$RUNTIME_CONFIG_DIR"/
+
+if [ -n "$PERSISTENT_DKIM_DIR" ]; then
+  mkdir -p "$PERSISTENT_DKIM_DIR"
+  if [ -d "$SOURCE_CONFIG_DIR/dkim" ] && [ -z "$(ls -A "$PERSISTENT_DKIM_DIR" 2>/dev/null)" ]; then
+    cp -R "$SOURCE_CONFIG_DIR"/dkim/. "$PERSISTENT_DKIM_DIR"/
+  fi
+  rm -rf "$RUNTIME_CONFIG_DIR/dkim"
+  ln -s "$PERSISTENT_DKIM_DIR" "$RUNTIME_CONFIG_DIR/dkim"
+fi
+
+if [ -d "$RUNTIME_CONFIG_DIR/dkim" ]; then
+  for key_file in "$RUNTIME_CONFIG_DIR"/dkim/*.key; do
+    [ -f "$key_file" ] || break
+    domain="$(basename "$key_file" .key)"
+    domain_dir="$RUNTIME_CONFIG_DIR/dkim/$domain"
+    mkdir -p "$domain_dir"
+    cp "$key_file" "$domain_dir/private"
+    if [ ! -f "$domain_dir/selector" ]; then
+      printf 'default\n' > "$domain_dir/selector"
+    fi
+  done
+
+  find "$RUNTIME_CONFIG_DIR/dkim" -mindepth 1 -maxdepth 1 -type d -exec chmod 755 {} +
+  find "$RUNTIME_CONFIG_DIR/dkim" -type f -name private -exec chmod 644 {} +
+  find "$RUNTIME_CONFIG_DIR/dkim" -type f -name selector -exec chmod 644 {} +
+fi
 
 # Haraka resolves custom plugins and local requires relative to the runtime root
 # passed with `-c`. Link shared code/dependencies there so local plugins load.

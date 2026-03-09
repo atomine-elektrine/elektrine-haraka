@@ -16,7 +16,8 @@ const {
     spam,
     attachments,
     bounce,
-    text
+    text,
+    domains
 } = require('../lib');
 const queue = require('../lib/queue-client');
 const telemetry = require('../lib/telemetry');
@@ -82,13 +83,24 @@ function build_spam_context(envelope) {
     };
 }
 
-function build_webhook_data(envelope, parsed) {
+function get_local_recipients(recipients) {
+    const unique = new Set();
+
+    return (Array.isArray(recipients) ? recipients : [])
+        .map((recipient) => text.normalize_header(recipient || ''))
+        .filter((recipient) => recipient && domains.is_local_domain(domains.extract_domain(recipient)))
+        .filter((recipient) => !unique.has(recipient) && unique.add(recipient));
+}
+
+function build_webhook_data(envelope, parsed, recipient = null) {
     const from_email = text.normalize_header(parsed.from ? parsed.from.text : envelope.mail_from);
     const subject = text.normalize_header(parsed.subject || '');
     const text_body = cfg.include_body ? (parsed.text || '') : '';
     const html_body = cfg.include_body ? (parsed.html || '') : '';
-    const to_email = text.normalize_header(parsed.to ? parsed.to.text : (envelope.rcpt_to && envelope.rcpt_to[0]) || '');
-    const rcpt_to = text.normalize_header((envelope.rcpt_to && envelope.rcpt_to[0]) || '');
+    const local_recipients = get_local_recipients(envelope.rcpt_to);
+    const effective_recipient = text.normalize_header(recipient || local_recipients[0] || (envelope.rcpt_to && envelope.rcpt_to[0]) || '');
+    const to_email = text.normalize_header(parsed.to ? parsed.to.text : effective_recipient);
+    const rcpt_to = effective_recipient;
     const mail_from = text.normalize_header(envelope.mail_from || '');
 
     const spam_context = build_spam_context(envelope);
@@ -198,24 +210,30 @@ async function process_message(raw_element) {
                 if (level === 'warn') logger.warn('mime_parse_fallback', { message });
             }
         });
-        const webhook_payload = build_webhook_data(envelope, parsed);
+        const local_recipients = get_local_recipients(envelope.rcpt_to);
+        const target_recipients = local_recipients.length > 0 ? local_recipients : [null];
+        const sample_payload = build_webhook_data(envelope, parsed, target_recipients[0]);
 
-        if (webhook_payload.is_bounce) {
+        if (sample_payload.is_bounce) {
             counters.skipped_bounce += 1;
             logger.info('skip_bounce', {
-                message_id: webhook_payload.message_id,
-                subject: webhook_payload.subject
+                message_id: sample_payload.message_id,
+                subject: sample_payload.subject
             });
             return;
         }
 
-        await send_webhook_with_retry(webhook_payload);
-        counters.delivered += 1;
-        logger.info('webhook_delivered', {
-            message_id: webhook_payload.message_id,
-            rcpt_to: webhook_payload.rcpt_to,
-            attachment_count: webhook_payload.attachment_count
-        });
+        for (const recipient of target_recipients) {
+            const webhook_payload = build_webhook_data(envelope, parsed, recipient);
+
+            await send_webhook_with_retry(webhook_payload);
+            counters.delivered += 1;
+            logger.info('webhook_delivered', {
+                message_id: webhook_payload.message_id,
+                rcpt_to: webhook_payload.rcpt_to,
+                attachment_count: webhook_payload.attachment_count
+            });
+        }
     } catch (err) {
         counters.failed += 1;
         logger.error('process_failed', {

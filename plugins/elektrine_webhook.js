@@ -131,19 +131,29 @@ exports.parse_and_send = function(transaction, connection, next) {
         });
 };
 
+function get_local_recipients(recipients) {
+    const unique = new Set();
+
+    return (Array.isArray(recipients) ? recipients : [])
+        .map((recipient) => text.normalize_header(recipient || ''))
+        .filter((recipient) => recipient && domains.is_local_domain(domains.extract_domain(recipient)))
+        .filter((recipient) => !unique.has(recipient) && unique.add(recipient));
+}
+
 exports.build_webhook_data = function(transaction, connection, parsed) {
     const plugin = this;
     
     const message_id = transaction.uuid || crypto.randomUUID();
     const mail_from = transaction.mail_from ? transaction.mail_from.address() : '';
     const rcpt_to = transaction.rcpt_to.map(rcpt => rcpt.address());
+    const local_recipients = get_local_recipients(rcpt_to);
     
     // Extract from email
     const from_email = text.normalize_header(parsed.from ? parsed.from.text : mail_from);
     const subject = text.normalize_header(parsed.subject || '');
     const text_body = parsed.text || '';
     const html_body = parsed.html || '';
-    const to_email = text.normalize_header(parsed.to ? parsed.to.text : rcpt_to[0] || '');
+    const to_email = text.normalize_header(parsed.to ? parsed.to.text : local_recipients[0] || rcpt_to[0] || '');
     
     // Check if bounce
     const is_bounce = bounceDetector.is_bounce(from_email, subject, text_body, {
@@ -162,7 +172,8 @@ exports.build_webhook_data = function(transaction, connection, parsed) {
         message_id: message_id,
         from: from_email,
         to: to_email,
-        rcpt_to: text.normalize_header(rcpt_to[0] || ''),
+        rcpt_to: local_recipients[0] || text.normalize_header(rcpt_to[0] || ''),
+        all_local_rcpt_to: local_recipients,
         mail_from: text.normalize_header(mail_from),
         subject: subject,
         text_body: text_body,
@@ -185,7 +196,36 @@ exports.build_webhook_data = function(transaction, connection, parsed) {
 exports.send_webhook = function(email_data, next) {
     const plugin = this;
 
-    plugin.send_webhook_with_retry(email_data, 0, next);
+    plugin.send_webhook_payloads(plugin.expand_webhook_payloads(email_data), 0, next);
+};
+
+exports.expand_webhook_payloads = function(email_data) {
+    const local_recipients = get_local_recipients(email_data.all_local_rcpt_to || [email_data.rcpt_to]);
+
+    if (local_recipients.length <= 1) {
+        return [email_data];
+    }
+
+    return local_recipients.map((recipient) => ({
+        ...email_data,
+        rcpt_to: recipient
+    }));
+};
+
+exports.send_webhook_payloads = function(payloads, index, next) {
+    const plugin = this;
+
+    if (index >= payloads.length) {
+        return next(constants.ok, 'Message accepted');
+    }
+
+    return plugin.send_webhook_with_retry(payloads[index], 0, (code, message) => {
+        if (code === constants.ok) {
+            return plugin.send_webhook_payloads(payloads, index + 1, next);
+        }
+
+        return next(code, message);
+    });
 };
 
 exports.send_webhook_with_retry = function(email_data, attempt, next) {

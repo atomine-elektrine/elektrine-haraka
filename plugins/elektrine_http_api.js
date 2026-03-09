@@ -10,7 +10,9 @@
 
 'use strict';
 
+const fs = require('fs');
 const http = require('http');
+const path = require('path');
 const crypto = require('crypto');
 const net = require('net');
 const constants = require('haraka-constants');
@@ -35,7 +37,11 @@ exports.register = function() {
         auth_failures: 0,
         rate_limited: 0,
         sent_ok: 0,
-        sent_error: 0
+        sent_error: 0,
+        dkim_sync_ok: 0,
+        dkim_sync_error: 0,
+        dkim_delete_ok: 0,
+        dkim_delete_error: 0
     };
 
     // Validate critical config at startup
@@ -92,10 +98,10 @@ exports.start_server = function() {
 exports.handle_request = function(req, res) {
     const plugin = this;
     plugin.stats.requests_total += 1;
-    const path = plugin.get_request_path(req);
+    const request_path = plugin.get_request_path(req);
 
-    if (req.method === 'GET' && (path === '/status' || path === '/healthz')) {
-        if (!plugin.is_ops_request_allowed(req, path)) {
+    if (req.method === 'GET' && (request_path === '/status' || request_path === '/healthz')) {
+        if (!plugin.is_ops_request_allowed(req, request_path)) {
             return plugin.send_response(res, 403, { ok: false, error: 'Forbidden' });
         }
         return plugin.send_response(res, 200, {
@@ -105,8 +111,8 @@ exports.handle_request = function(req, res) {
         });
     }
 
-    if (req.method === 'GET' && path === '/metrics') {
-        if (!plugin.is_ops_request_allowed(req, path)) {
+    if (req.method === 'GET' && request_path === '/metrics') {
+        if (!plugin.is_ops_request_allowed(req, request_path)) {
             return plugin.send_response(res, 403, { ok: false, error: 'Forbidden' });
         }
         return plugin.send_metrics(res);
@@ -117,7 +123,7 @@ exports.handle_request = function(req, res) {
     if (allowed_origin) {
         res.setHeader('Access-Control-Allow-Origin', allowed_origin);
     }
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key');
 
     // Handle preflight
@@ -127,58 +133,53 @@ exports.handle_request = function(req, res) {
         return;
     }
 
-    // Route check
-    if (req.method !== 'POST' || path !== '/api/v1/send') {
+    const route = plugin.resolve_api_route(req.method, request_path);
+    if (!route) {
         return plugin.send_response(res, 404, { success: false, error: 'Not found' });
     }
 
-    // API key authentication (constant-time comparison to prevent timing attacks)
-    const api_key = plugin.get_header_value(req, 'x-api-key');
-    const expected_key = plugin.cfg.http_api_key || '';
-    if (!plugin.constant_time_equal(api_key, expected_key)) {
-        plugin.stats.auth_failures += 1;
-        return plugin.send_response(res, 401, { success: false, error: 'Unauthorized' });
+    if (!plugin.authenticate_api_request(req, res)) {
+        return;
     }
 
-    // Rate limiting
-    const client_ip = plugin.get_client_ip(req);
-
-    if (!plugin.check_rate_limit(client_ip)) {
-        plugin.stats.rate_limited += 1;
-        return plugin.send_response(res, 429, { success: false, error: 'Rate limit exceeded' });
+    if (!plugin.check_rate_limit_or_reject(req, res)) {
+        return;
     }
 
-    // Parse request body with size limit and timeout
-    let body = '';
-    let body_size = 0;
-    let timed_out = false;
-
-    const body_timeout = setTimeout(() => {
-        timed_out = true;
-        req.destroy();
-        plugin.send_response(res, 408, { success: false, error: 'Request timeout' });
-    }, BODY_READ_TIMEOUT_MS);
-
-    req.on('data', chunk => {
-        body_size += chunk.length;
-        if (body_size > MAX_BODY_SIZE) {
-            clearTimeout(body_timeout);
-            req.destroy();
-            return plugin.send_response(res, 413, { success: false, error: 'Request body too large' });
-        }
-        body += chunk;
-    });
-
-    req.on('end', () => {
-        clearTimeout(body_timeout);
-        if (!timed_out) {
+    if (route.kind === 'send') {
+        return plugin.read_request_body(req, res, (body) => {
             plugin.process_send_request(body, res);
-        }
-    });
+        });
+    }
 
-    req.on('error', () => {
-        clearTimeout(body_timeout);
-    });
+    if (route.kind === 'dkim_upsert') {
+        return plugin.read_request_body(req, res, (body) => {
+            plugin.process_dkim_upsert_request(route.domain, body, res);
+        });
+    }
+
+    if (route.kind === 'dkim_delete') {
+        return plugin.process_dkim_delete_request(route.domain, res);
+    }
+};
+
+exports.resolve_api_route = function(method, request_path) {
+    if (method === 'POST' && request_path === '/api/v1/send') {
+        return { kind: 'send' };
+    }
+
+    const dkim_domain = this.get_dkim_domain_from_path(request_path);
+    if (!dkim_domain) return null;
+
+    if (method === 'PUT') {
+        return { kind: 'dkim_upsert', domain: dkim_domain };
+    }
+
+    if (method === 'DELETE') {
+        return { kind: 'dkim_delete', domain: dkim_domain };
+    }
+
+    return null;
 };
 
 exports.rebuild_allowlists = function() {
@@ -257,6 +258,76 @@ exports.constant_time_equal = function(received, expected) {
     const expected_buffer = Buffer.from(String(expected));
     if (received_buffer.length !== expected_buffer.length) return false;
     return crypto.timingSafeEqual(received_buffer, expected_buffer);
+};
+
+exports.authenticate_api_request = function(req, res) {
+    const plugin = this;
+    const api_key = plugin.get_header_value(req, 'x-api-key');
+    const expected_key = plugin.cfg.http_api_key || '';
+
+    if (!plugin.constant_time_equal(api_key, expected_key)) {
+        plugin.stats.auth_failures += 1;
+        plugin.send_response(res, 401, { success: false, error: 'Unauthorized' });
+        return false;
+    }
+
+    return true;
+};
+
+exports.check_rate_limit_or_reject = function(req, res) {
+    const plugin = this;
+    const client_ip = plugin.get_client_ip(req);
+
+    if (!plugin.check_rate_limit(client_ip)) {
+        plugin.stats.rate_limited += 1;
+        plugin.send_response(res, 429, { success: false, error: 'Rate limit exceeded' });
+        return false;
+    }
+
+    return true;
+};
+
+exports.read_request_body = function(req, res, callback) {
+    const plugin = this;
+    let body = '';
+    let body_size = 0;
+    let finished = false;
+
+    const finish_once = (handler) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(body_timeout);
+        handler();
+    };
+
+    const body_timeout = setTimeout(() => {
+        req.destroy();
+        finish_once(() => {
+            plugin.send_response(res, 408, { success: false, error: 'Request timeout' });
+        });
+    }, BODY_READ_TIMEOUT_MS);
+
+    req.on('data', (chunk) => {
+        if (finished) return;
+
+        body_size += chunk.length;
+        if (body_size > MAX_BODY_SIZE) {
+            req.destroy();
+            return finish_once(() => {
+                plugin.send_response(res, 413, { success: false, error: 'Request body too large' });
+            });
+        }
+
+        body += chunk;
+    });
+
+    req.on('end', () => {
+        finish_once(() => callback(body));
+    });
+
+    req.on('error', () => {
+        finish_once(() => {});
+    });
 };
 
 exports.parse_ip = function(value) {
@@ -353,6 +424,167 @@ exports.is_ops_request_allowed = function(req, path) {
         plugin.logwarn(`Denied ${path} request from ${client_ip || 'unknown'}`);
     }
     return allowed;
+};
+
+exports.get_dkim_domain_from_path = function(request_path) {
+    const match = request_path.match(/^\/api\/v1\/dkim\/domains\/([^/]+)$/);
+    if (!match) return null;
+
+    try {
+        const decoded = decodeURIComponent(match[1]);
+        return this.normalize_dkim_domain(decoded);
+    } catch (err) {
+        return null;
+    }
+};
+
+exports.normalize_dkim_domain = function(value) {
+    const domain = String(value || '').trim().toLowerCase().replace(/\.+$/, '');
+    if (!domain) return null;
+
+    const labels = domain.split('.');
+    if (labels.length < 2) return null;
+
+    for (const label of labels) {
+        if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)) {
+            return null;
+        }
+    }
+
+    return domain;
+};
+
+exports.normalize_dkim_selector = function(value) {
+    const selector = String(value || '').trim();
+    if (!selector) return null;
+    if (!/^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,61}[A-Za-z0-9])?$/.test(selector)) {
+        return null;
+    }
+    return selector;
+};
+
+exports.normalize_private_key = function(value) {
+    if (typeof value !== 'string') return null;
+
+    const private_key = value.replace(/\r\n/g, '\n').trim();
+    if (!private_key.includes('-----BEGIN') || !private_key.includes('PRIVATE KEY-----')) {
+        return null;
+    }
+    if (private_key.includes('\u0000')) {
+        return null;
+    }
+
+    return `${private_key}\n`;
+};
+
+exports.get_dkim_storage_dir = function() {
+    const configured = String(this.cfg.dkim_storage_dir || '').trim();
+    if (configured) return configured;
+
+    const runtime_dir = '/tmp/haraka-config/config/dkim';
+    if (fs.existsSync(runtime_dir)) {
+        return runtime_dir;
+    }
+
+    return path.resolve(process.cwd(), 'config', 'dkim');
+};
+
+exports.process_dkim_upsert_request = function(domain, body, res) {
+    const plugin = this;
+    let payload;
+
+    try {
+        payload = JSON.parse(body || '{}');
+    } catch (err) {
+        plugin.stats.dkim_sync_error += 1;
+        return plugin.send_response(res, 400, { success: false, error: 'Invalid JSON' });
+    }
+
+    const selector = plugin.normalize_dkim_selector(payload.selector);
+    const private_key = plugin.normalize_private_key(payload.private_key);
+
+    if (!selector || !private_key) {
+        plugin.stats.dkim_sync_error += 1;
+        return plugin.send_response(res, 400, {
+            success: false,
+            error: 'selector and private_key are required'
+        });
+    }
+
+    try {
+        plugin.upsert_dkim_domain(domain, selector, private_key);
+        plugin.stats.dkim_sync_ok += 1;
+        plugin.loginfo(`Installed DKIM key for ${domain} with selector ${selector}`);
+        return plugin.send_response(res, 200, {
+            success: true,
+            domain,
+            selector
+        });
+    } catch (err) {
+        plugin.stats.dkim_sync_error += 1;
+        plugin.logerror(`Failed to install DKIM key for ${domain}: ${err.message}`);
+        return plugin.send_response(res, 500, {
+            success: false,
+            error: `Failed to install DKIM key: ${err.message}`
+        });
+    }
+};
+
+exports.process_dkim_delete_request = function(domain, res) {
+    const plugin = this;
+
+    try {
+        const deleted = plugin.delete_dkim_domain(domain);
+        plugin.stats.dkim_delete_ok += 1;
+        plugin.loginfo(`${deleted ? 'Removed' : 'DKIM key not present for'} ${domain}`);
+        return plugin.send_response(res, 200, {
+            success: true,
+            domain,
+            deleted
+        });
+    } catch (err) {
+        plugin.stats.dkim_delete_error += 1;
+        plugin.logerror(`Failed to remove DKIM key for ${domain}: ${err.message}`);
+        return plugin.send_response(res, 500, {
+            success: false,
+            error: `Failed to remove DKIM key: ${err.message}`
+        });
+    }
+};
+
+exports.upsert_dkim_domain = function(domain, selector, private_key) {
+    const storage_dir = this.get_dkim_storage_dir();
+    const domain_dir = path.join(storage_dir, domain);
+    const private_path = path.join(domain_dir, 'private');
+    const selector_path = path.join(domain_dir, 'selector');
+
+    fs.mkdirSync(domain_dir, { recursive: true, mode: 0o755 });
+    fs.chmodSync(domain_dir, 0o755);
+
+    this.atomic_write_file(private_path, private_key, 0o600);
+    this.atomic_write_file(selector_path, `${selector}\n`, 0o644);
+};
+
+exports.delete_dkim_domain = function(domain) {
+    const domain_dir = path.join(this.get_dkim_storage_dir(), domain);
+    if (!fs.existsSync(domain_dir)) {
+        return false;
+    }
+
+    fs.rmSync(domain_dir, { recursive: true, force: true });
+    return true;
+};
+
+exports.atomic_write_file = function(target_path, contents, mode) {
+    const directory = path.dirname(target_path);
+    const temp_path = path.join(
+        directory,
+        `.${path.basename(target_path)}.${process.pid}.${Date.now()}.tmp`
+    );
+
+    fs.writeFileSync(temp_path, contents, { mode });
+    fs.renameSync(temp_path, target_path);
+    fs.chmodSync(target_path, mode);
 };
 
 exports.process_send_request = function(body, res) {
@@ -513,6 +745,18 @@ exports.send_metrics = function(res) {
         '# HELP elektrine_http_api_sent_error_total Failed send requests',
         '# TYPE elektrine_http_api_sent_error_total counter',
         `elektrine_http_api_sent_error_total ${plugin.stats.sent_error}`,
+        '# HELP elektrine_http_api_dkim_sync_ok_total Successful DKIM sync requests',
+        '# TYPE elektrine_http_api_dkim_sync_ok_total counter',
+        `elektrine_http_api_dkim_sync_ok_total ${plugin.stats.dkim_sync_ok}`,
+        '# HELP elektrine_http_api_dkim_sync_error_total Failed DKIM sync requests',
+        '# TYPE elektrine_http_api_dkim_sync_error_total counter',
+        `elektrine_http_api_dkim_sync_error_total ${plugin.stats.dkim_sync_error}`,
+        '# HELP elektrine_http_api_dkim_delete_ok_total Successful DKIM delete requests',
+        '# TYPE elektrine_http_api_dkim_delete_ok_total counter',
+        `elektrine_http_api_dkim_delete_ok_total ${plugin.stats.dkim_delete_ok}`,
+        '# HELP elektrine_http_api_dkim_delete_error_total Failed DKIM delete requests',
+        '# TYPE elektrine_http_api_dkim_delete_error_total counter',
+        `elektrine_http_api_dkim_delete_error_total ${plugin.stats.dkim_delete_error}`,
         '# HELP elektrine_http_api_uptime_seconds Process uptime in seconds',
         '# TYPE elektrine_http_api_uptime_seconds gauge',
         `elektrine_http_api_uptime_seconds ${uptime_seconds}`
