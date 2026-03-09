@@ -120,7 +120,13 @@ services:
           memory: 768M
           cpus: '1.0'
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/status >/dev/null 2>&1"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:8080/status', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+        ]
       interval: 30s
       timeout: 10s
       retries: 5

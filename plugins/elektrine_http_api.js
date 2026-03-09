@@ -135,6 +135,9 @@ exports.handle_request = function(req, res) {
 
     const route = plugin.resolve_api_route(req.method, request_path);
     if (!route) {
+        plugin.logwarn(
+            `Unmatched HTTP route method=${req.method || 'UNKNOWN'} url=${req.url || ''} path=${request_path}`
+        );
         return plugin.send_response(res, 404, { success: false, error: 'Not found' });
     }
 
@@ -239,8 +242,28 @@ exports.build_cidr_allowlist = function(cidr_values) {
 };
 
 exports.get_request_path = function(req) {
+    const raw_target = String(req.url || '').trim();
+
+    if (!raw_target) return '/';
+    if (raw_target === '*') return '*';
+
     try {
-        return new URL(req.url || '/', 'http://localhost').pathname;
+        if (raw_target.startsWith('/')) {
+            return new URL(raw_target, 'http://localhost').pathname;
+        }
+
+        if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(raw_target)) {
+            return new URL(raw_target).pathname;
+        }
+
+        // Some lightweight clients send a non-standard request target like
+        // `127.0.0.1:8080/status`; normalize that into a path instead of
+        // falling back to `/` and returning a misleading 404.
+        if (/^[^/?#]+\//.test(raw_target)) {
+            return new URL(`http://${raw_target}`).pathname;
+        }
+
+        return new URL(`http://localhost/${raw_target.replace(/^\/+/, '')}`).pathname;
     } catch (err) {
         return '/';
     }
