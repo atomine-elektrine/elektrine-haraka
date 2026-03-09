@@ -247,26 +247,39 @@ exports.get_request_path = function(req) {
     if (!raw_target) return '/';
     if (raw_target === '*') return '*';
 
-    try {
-        if (raw_target.startsWith('/')) {
-            return new URL(raw_target, 'http://localhost').pathname;
-        }
+    let path_target = raw_target;
 
-        if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(raw_target)) {
-            return new URL(raw_target).pathname;
-        }
-
+    if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(path_target)) {
+        const scheme_sep = path_target.indexOf('://');
+        const authority_start = scheme_sep >= 0 ? scheme_sep + 3 : 0;
+        const first_slash = path_target.indexOf('/', authority_start);
+        path_target = first_slash >= 0 ? path_target.slice(first_slash) : '/';
+    } else if (!path_target.startsWith('/')) {
         // Some lightweight clients send a non-standard request target like
         // `127.0.0.1:8080/status`; normalize that into a path instead of
         // falling back to `/` and returning a misleading 404.
-        if (/^[^/?#]+\//.test(raw_target)) {
-            return new URL(`http://${raw_target}`).pathname;
-        }
-
-        return new URL(`http://localhost/${raw_target.replace(/^\/+/, '')}`).pathname;
-    } catch (err) {
-        return '/';
+        const first_slash = path_target.indexOf('/');
+        path_target = first_slash >= 0 ? path_target.slice(first_slash) : `/${path_target}`;
     }
+
+    const query_index = path_target.indexOf('?');
+    const hash_index = path_target.indexOf('#');
+    let cut_index = -1;
+
+    if (query_index >= 0 && hash_index >= 0) {
+        cut_index = Math.min(query_index, hash_index);
+    } else if (query_index >= 0) {
+        cut_index = query_index;
+    } else if (hash_index >= 0) {
+        cut_index = hash_index;
+    }
+
+    if (cut_index >= 0) {
+        path_target = path_target.slice(0, cut_index);
+    }
+
+    if (!path_target) return '/';
+    return path_target.startsWith('/') ? path_target : `/${path_target}`;
 };
 
 exports.get_header_value = function(req, key) {
