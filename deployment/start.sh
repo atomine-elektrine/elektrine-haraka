@@ -83,10 +83,6 @@ compose up -d caddy
 echo "Starting certificate copier..."
 compose up -d cert-copier
 
-# 7. Start fail2ban (skip if having issues)
-echo "Starting fail2ban..."
-compose up -d fail2ban || echo "WARNING: Fail2ban had issues, continuing without it"
-
 echo ""
 echo "Deployment complete!"
 echo ""

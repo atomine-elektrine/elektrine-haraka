@@ -10,7 +10,7 @@ In plain terms: SMTP comes in, gets checked, gets queued, and a worker posts cle
 - `haraka-submission` (`587`): authenticated client submission.
 - `haraka-outbound` (internal `8080`): HTTP send API plus health/metrics.
 - `haraka-worker`: reads Redis queue and posts to Phoenix.
-- Support services: `redis`, `clamav`, `spamassassin`, `caddy`, `cert-copier`, `fail2ban`.
+- Support services: `redis`, `clamav`, `spamassassin`, `caddy`, `cert-copier`.
 
 ## Quick start
 

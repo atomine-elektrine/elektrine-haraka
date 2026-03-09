@@ -8,7 +8,7 @@ Compose-based production deployment for the multi-role Haraka topology.
 - `haraka-submission` (`:587`)
 - `haraka-outbound` (internal `:8080` API)
 - `haraka-worker` (Redis consumer)
-- `redis`, `clamav`, `spamassassin`, `caddy`, `cert-copier`, `fail2ban`
+- `redis`, `clamav`, `spamassassin`, `caddy`, `cert-copier`
 
 ## Setup
 

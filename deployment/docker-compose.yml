@@ -207,23 +207,6 @@ services:
       - caddy
     restart: unless-stopped
 
-  fail2ban:
-    image: ${FAIL2BAN_IMAGE:-crazymax/fail2ban:latest}
-    network_mode: "host"
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-    volumes:
-      - ../docker/fail2ban:/data:ro
-      - ../logs:/opt/haraka/logs:ro
-      - caddy-data:/caddy-data:ro
-      - /var/log:/var/log:ro
-    environment:
-      - TZ=UTC
-      - F2B_LOG_LEVEL=INFO
-      - F2B_LOG_TARGET=STDOUT
-    restart: unless-stopped
-
   redis:
     image: ${REDIS_IMAGE:-redis:7-alpine}
     command:
