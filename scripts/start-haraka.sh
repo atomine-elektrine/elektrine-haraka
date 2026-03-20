@@ -6,7 +6,7 @@ SOURCE_CONFIG_DIR="/app/config"
 SOURCE_PLUGINS_DIR="/app/plugins"
 SOURCE_LIB_DIR="/app/lib"
 SOURCE_NODE_MODULES_DIR="/app/node_modules"
-RUNTIME_ROOT_DIR="/tmp/haraka-config"
+RUNTIME_ROOT_DIR="/tmp/haraka-config-${ROLE}"
 RUNTIME_CONFIG_DIR="$RUNTIME_ROOT_DIR/config"
 RUNTIME_PLUGINS_DIR="$RUNTIME_ROOT_DIR/plugins"
 RUNTIME_LIB_DIR="$RUNTIME_ROOT_DIR/lib"
@@ -80,6 +80,33 @@ fi
 
 if [ -f "$LOG_PROFILE" ]; then
   cp "$LOG_PROFILE" "$RUNTIME_CONFIG_DIR/log.ini"
+fi
+
+TLS_KEY_PATH="/app/ssl/cert.key"
+TLS_CERT_PATH="/app/ssl/cert.crt"
+
+if [ ! -f "$TLS_KEY_PATH" ] || [ ! -f "$TLS_CERT_PATH" ]; then
+  TLS_KEY_PATH="$RUNTIME_CONFIG_DIR/tls_key.pem"
+  TLS_CERT_PATH="$RUNTIME_CONFIG_DIR/tls_cert.pem"
+  TLS_DOMAIN="${HARAKA_DOMAIN:-localhost}"
+
+  echo "WARN: TLS certificates not found, generating temporary self-signed certificate for role=$ROLE" >&2
+  openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 30 \
+    -subj "/CN=$TLS_DOMAIN" \
+    -keyout "$TLS_KEY_PATH" \
+    -out "$TLS_CERT_PATH" >/dev/null 2>&1
+
+  cat > "$RUNTIME_CONFIG_DIR/tls.ini" <<EOF
+[main]
+key=$TLS_KEY_PATH
+cert=$TLS_CERT_PATH
+minVersion=TLSv1.2
+maxVersion=TLSv1.3
+requestCert=false
+rejectUnauthorized=false
+secureRenegotiation=true
+honorCipherOrder=true
+EOF
 fi
 
 echo "Starting Haraka with role=$ROLE"

@@ -1,0 +1,22 @@
+app = "elektrine-mail-redis"
+primary_region = "ord"
+kill_signal = "SIGINT"
+kill_timeout = "5s"
+
+[build]
+  image = "redis:7-alpine"
+
+[env]
+  REDIS_PASSWORD = ""
+
+[mounts]
+  source = "redis_data"
+  destination = "/data"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
+
+[processes]
+  app = "redis-server --appendonly yes --appendfsync everysec --save 900 1 --save 300 10 --save 60 10000 --dir /data"

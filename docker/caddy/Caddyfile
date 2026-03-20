@@ -1,4 +1,4 @@
-{$HARAKA_DOMAIN:haraka.elektrine.com} {
+{$HARAKA_DOMAIN:mail.example.com} {
     # Automatic HTTPS with Let's Encrypt
     # Caddy handles certificate generation and renewal automatically
 
@@ -10,7 +10,7 @@
     # API endpoints
     @api path /api/*
     handle @api {
-        reverse_proxy haraka-outbound:8080 {
+        reverse_proxy 127.0.0.1:8080 {
             header_up X-Forwarded-For {remote_host}
             header_up X-Real-IP {remote_host}
         }
@@ -25,7 +25,7 @@
     @ops path /status /healthz
 
     handle @ops_allowed {
-        reverse_proxy haraka-outbound:8080 {
+        reverse_proxy 127.0.0.1:8080 {
             header_up X-Forwarded-For {remote_host}
             header_up X-Real-IP {remote_host}
         }
@@ -42,7 +42,7 @@
     }
 
     handle @metrics_allowed {
-        reverse_proxy haraka-outbound:8080 {
+        reverse_proxy 127.0.0.1:8080 {
             header_up X-Forwarded-For {remote_host}
             header_up X-Real-IP {remote_host}
         }
@@ -57,6 +57,6 @@
 }
 
 # HTTP redirect (automatic)
-http://{$HARAKA_DOMAIN:haraka.elektrine.com} {
+http://{$HARAKA_DOMAIN:mail.example.com} {
     redir https://{host}{uri} permanent
 }

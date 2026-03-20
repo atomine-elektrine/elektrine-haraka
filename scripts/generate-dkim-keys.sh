@@ -6,10 +6,7 @@ if [ "$#" -gt 0 ]; then
   domains=("$@")
 else
   domains=(
-    elektrine.com
-    elektrine.net
-    elektrine.org
-    z.org
+    example.com
   )
 fi
 

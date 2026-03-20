@@ -7,7 +7,7 @@ ENV HARAKA_DKIM_DIR=/data/haraka/dkim
 
 # Install system dependencies and Haraka globally.
 # iconv must be global because Haraka is installed/executed globally.
-RUN apk add --no-cache libarchive-tools openssl && npm install -g Haraka toobusy-js iconv
+RUN apk add --no-cache libarchive-tools openssl caddy redis && npm install -g Haraka toobusy-js iconv
 
 # Create app directory  
 WORKDIR /app
@@ -20,6 +20,7 @@ RUN npm ci --omit=dev
 
 # Copy configuration and plugins
 COPY config/ ./config/
+COPY docker/ ./docker/
 COPY plugins/ ./plugins/
 COPY lib/ ./lib/
 COPY scripts/ ./scripts/

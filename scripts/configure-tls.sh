@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 
 # Configure Haraka TLS with Caddy certificates
 set -e
 
-DOMAIN=${HARAKA_DOMAIN:-haraka.elektrine.com}
+DOMAIN=${HARAKA_DOMAIN:-mail.example.com}
 CERT_PATH="/app/ssl/cert.crt"
 KEY_PATH="/app/ssl/cert.key"
 

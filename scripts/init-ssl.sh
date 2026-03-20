@@ -5,8 +5,8 @@
 
 set -e
 
-DOMAIN="${HARAKA_DOMAIN:-haraka.elektrine.com}"
-EMAIL="${SSL_EMAIL:-admin@elektrine.com}"
+DOMAIN="${HARAKA_DOMAIN:-mail.example.com}"
+EMAIL="${SSL_EMAIL:-admin@example.com}"
 STAGING=${STAGING:-0}
 
 echo "🔐 Setting up SSL certificates for $DOMAIN"

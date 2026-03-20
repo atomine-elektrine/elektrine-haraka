@@ -23,7 +23,7 @@ services:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379}
       - ELEKTRINE_QUEUE_NAME=${ELEKTRINE_QUEUE_NAME:-elektrine:inbound}
       - ELEKTRINE_DLQ_NAME=${ELEKTRINE_DLQ_NAME:-elektrine:inbound:dlq}
-      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-haraka.elektrine.com}
+      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-mail.example.com}
     restart: unless-stopped
     networks:
       - haraka-network
@@ -67,7 +67,7 @@ services:
       - PHOENIX_VERIFY_URL=${PHOENIX_VERIFY_URL:-}
       - PHOENIX_DOMAINS_URL=${PHOENIX_DOMAINS_URL:-}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379}
-      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-haraka.elektrine.com}
+      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-mail.example.com}
     restart: unless-stopped
     networks:
       - haraka-network
@@ -108,7 +108,7 @@ services:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379}
       - HARAKA_HTTP_PORT=8080
       - HARAKA_HTTP_HOST=0.0.0.0
-      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-haraka.elektrine.com}
+      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-mail.example.com}
     restart: unless-stopped
     networks:
       - haraka-network
@@ -170,7 +170,7 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     environment:
-      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-haraka.elektrine.com}
+      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-mail.example.com}
       - "METRICS_ALLOWED_CIDRS=${METRICS_ALLOWED_CIDRS:-127.0.0.1/32 ::1/128}"
       - "OPS_ALLOWED_CIDRS=${OPS_ALLOWED_CIDRS:-127.0.0.1/32 ::1/128}"
     restart: unless-stopped
@@ -185,7 +185,7 @@ services:
       - caddy-data:/caddy-data:ro
       - ssl-certs:/ssl-certs
     environment:
-      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-haraka.elektrine.com}
+      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-mail.example.com}
     command: >
       sh -c "
         while true; do

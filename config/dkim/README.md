@@ -2,11 +2,8 @@
 
 This directory should contain DKIM private keys for email signing.
 
-Built-in domain key files:
-- `elektrine.com.key` - DKIM private key for elektrine.com domain
-- `elektrine.net.key` - DKIM private key for elektrine.net domain
-- `elektrine.org.key` - DKIM private key for elektrine.org domain
-- `z.org.key` - DKIM private key for z.org domain
+Default domain key files:
+- `example.com.key` - DKIM private key for your primary mail domain
 
 Custom domains are also supported. You can either:
 - place `<domain>.key` files directly in this directory, or
@@ -18,7 +15,7 @@ expects, using `default` as the selector when no selector file is present.
 
 ## Generate DKIM Keys
 
-To generate DKIM keys for the built-in domains:
+To generate DKIM keys for the default domain:
 
 ```bash
 ./scripts/generate-dkim-keys.sh
@@ -35,10 +32,7 @@ To generate keys for custom domains:
 Add TXT records to your DNS:
 
 ```
-default._domainkey.elektrine.com TXT "v=DKIM1; k=rsa; p=<public_key_from_elektrine.com.pub>"
-default._domainkey.elektrine.net TXT "v=DKIM1; k=rsa; p=<public_key_from_elektrine.net.pub>"
-default._domainkey.elektrine.org TXT "v=DKIM1; k=rsa; p=<public_key_from_elektrine.org.pub>"
-default._domainkey.z.org TXT "v=DKIM1; k=rsa; p=<public_key_from_z.org.pub>"
+default._domainkey.example.com TXT "v=DKIM1; k=rsa; p=<public_key_from_example.com.pub>"
 ```
 
 Note: Remove `-----BEGIN PUBLIC KEY-----`, `-----END PUBLIC KEY-----`, and newlines from the public key when creating DNS records.
