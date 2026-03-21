@@ -51,3 +51,6 @@ curl -s https://your-domain/metrics
 - `/status`, `/healthz`, and `/metrics` are CIDR-restricted by Caddy (configure in `.env`).
 - Use immutable `HARAKA_IMAGE_TAG` values for reproducible rollouts.
 - Override `HARAKA_IMAGE` in `.env` if you need to pull from a different registry/repo.
+- `HARAKA_HTTP_UPSTREAM` controls where Caddy proxies the HTTP API:
+  - VPS/Docker Compose default: `haraka-outbound:8080`
+  - Host-loopback/Fly-style setup: `127.0.0.1:8080`

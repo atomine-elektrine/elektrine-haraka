@@ -171,6 +171,7 @@ services:
       - caddy-config:/config
     environment:
       - HARAKA_DOMAIN=${HARAKA_DOMAIN:-mail.example.com}
+      - HARAKA_HTTP_UPSTREAM=${HARAKA_HTTP_UPSTREAM:-haraka-outbound:8080}
       - "METRICS_ALLOWED_CIDRS=${METRICS_ALLOWED_CIDRS:-127.0.0.1/32 ::1/128}"
       - "OPS_ALLOWED_CIDRS=${OPS_ALLOWED_CIDRS:-127.0.0.1/32 ::1/128}"
     restart: unless-stopped
