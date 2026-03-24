@@ -39,6 +39,23 @@ For local image builds, switch the Haraka services in `deployment/docker-compose
 docker compose up -d --build
 ```
 
+## Same-host Docker deploy
+
+If Elektrine and Haraka run on the same host, use the dedicated Docker path:
+
+```bash
+cp deployment/.env.same-server.example deployment/.env
+# edit deployment/.env
+scripts/deploy/docker_deploy.sh
+```
+
+This mode:
+
+- keeps SMTP on Haraka (`25` and `587`)
+- binds Haraka's HTTP API to `127.0.0.1:18080`
+- copies TLS certs from the main Elektrine Caddy volume
+- avoids a second `80/443` reverse proxy on the host
+
 ## Configuration
 
 Set these in `deployment/.env`:

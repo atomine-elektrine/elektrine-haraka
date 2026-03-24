@@ -17,6 +17,32 @@ rm -rf "$RUNTIME_ROOT_DIR"
 mkdir -p "$RUNTIME_CONFIG_DIR"
 cp -R "$SOURCE_CONFIG_DIR"/. "$RUNTIME_CONFIG_DIR"/
 
+escape_sed() {
+  printf '%s' "$1" | sed 's/[\/&]/\\&/g'
+}
+
+HARAKA_DOMAIN_VALUE="${HARAKA_DOMAIN:-mail.example.com}"
+PHOENIX_WEBHOOK_URL_VALUE="${PHOENIX_WEBHOOK_URL:-}"
+PHOENIX_VERIFY_URL_VALUE="${PHOENIX_VERIFY_URL:-}"
+PHOENIX_DOMAINS_URL_VALUE="${PHOENIX_DOMAINS_URL:-}"
+
+sed -i "s/example\.com/$(escape_sed "$HARAKA_DOMAIN_VALUE")/g" "$RUNTIME_CONFIG_DIR/elektrine.ini"
+sed -i "s/app\.example\.com/host.docker.internal/g" "$RUNTIME_CONFIG_DIR/auth_proxy.ini"
+
+if [ -n "$PHOENIX_WEBHOOK_URL_VALUE" ]; then
+  sed -i "s#https://app\.example\.com/api/haraka/inbound#$(escape_sed "$PHOENIX_WEBHOOK_URL_VALUE")#g" "$RUNTIME_CONFIG_DIR/elektrine.ini"
+fi
+
+if [ -n "$PHOENIX_VERIFY_URL_VALUE" ]; then
+  sed -i "s#https://app\.example\.com/api/haraka/verify-recipient#$(escape_sed "$PHOENIX_VERIFY_URL_VALUE")#g" "$RUNTIME_CONFIG_DIR/elektrine.ini"
+fi
+
+if [ -n "$PHOENIX_DOMAINS_URL_VALUE" ]; then
+  sed -i "s#https://app\.example\.com/api/haraka/domains#$(escape_sed "$PHOENIX_DOMAINS_URL_VALUE")#g" "$RUNTIME_CONFIG_DIR/elektrine.ini"
+fi
+
+printf '%s\n' "$HARAKA_DOMAIN_VALUE" > "$RUNTIME_CONFIG_DIR/host_list"
+
 if [ -n "$PERSISTENT_DKIM_DIR" ]; then
   mkdir -p "$PERSISTENT_DKIM_DIR"
   if [ -d "$SOURCE_CONFIG_DIR/dkim" ] && [ -z "$(ls -A "$PERSISTENT_DKIM_DIR" 2>/dev/null)" ]; then

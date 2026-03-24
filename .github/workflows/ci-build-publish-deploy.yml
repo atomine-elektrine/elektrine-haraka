@@ -59,10 +59,12 @@ jobs:
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
+          port: ${{ secrets.DEPLOY_PORT || '22' }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -euo pipefail
-            DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+            DEPLOY_PATH="${{ secrets.DEPLOY_PATH || '/opt/elektrine-haraka' }}"
+            DEPLOY_BRANCH="${{ secrets.DEPLOY_BRANCH || 'main' }}"
             if [ -z "$DEPLOY_PATH" ]; then
               echo "::error::DEPLOY_PATH secret is empty."
               exit 1
@@ -72,26 +74,13 @@ jobs:
               exit 1
             fi
             cd "$DEPLOY_PATH"
-            COMPOSE_BASE_FILE=""
-            for candidate in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
-              if [ -f "$candidate" ]; then
-                COMPOSE_BASE_FILE="$candidate"
-                break
-              fi
-            done
 
-            if [ -z "$COMPOSE_BASE_FILE" ]; then
-              echo "::error::No docker compose file found in $DEPLOY_PATH"
-              ls -la
-              exit 1
-            fi
-            echo "Using compose file: $COMPOSE_BASE_FILE"
             if docker info >/dev/null 2>&1; then
-              compose() { docker compose "$@"; }
               docker_cmd() { docker "$@"; }
+              deploy_cmd() { "$@"; }
             elif sudo -n docker info >/dev/null 2>&1; then
-              compose() { sudo docker compose "$@"; }
               docker_cmd() { sudo docker "$@"; }
+              deploy_cmd() { sudo -n "$@"; }
             else
               echo "::error::DEPLOY_USER cannot access Docker daemon."
               echo "::error::Fix by adding the user to the docker group, or allow passwordless sudo for docker."
@@ -113,73 +102,10 @@ jobs:
 
             echo "$GHCR_PAT" | docker_cmd login ghcr.io -u "$GHCR_USER" --password-stdin
 
-            AVAILABLE_SERVICES="$(compose config --services)"
-            echo "Detected compose services:"
-            echo "$AVAILABLE_SERVICES"
+            git fetch --all --tags
+            git checkout "$DEPLOY_BRANCH"
+            git pull --ff-only origin "$DEPLOY_BRANCH"
 
-            SERVICES=""
-            for svc in haraka-inbound haraka-submission haraka-outbound haraka-worker caddy cert-copier fail2ban; do
-              if echo "$AVAILABLE_SERVICES" | grep -qx "$svc"; then
-                SERVICES="$SERVICES $svc"
-              fi
-            done
-
-            # Backward compatibility for older single-service compose files.
-            for legacy in haraka; do
-              if echo "$AVAILABLE_SERVICES" | grep -qx "$legacy"; then
-                SERVICES="$SERVICES $legacy"
-              fi
-            done
-
-            SERVICES="$(echo "$SERVICES" | xargs)"
-            if [ -z "$SERVICES" ]; then
-              echo "::error::No known Haraka services found in compose file."
-              exit 1
-            fi
-
-            TARGET_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-            TARGET_TAG="${{ github.sha }}"
-            COMPOSE_FILES="$COMPOSE_BASE_FILE"
-            OVERRIDE_FILE=""
-            HARAKA_SERVICE_FOUND=0
-
-            for svc in $SERVICES; do
-              case "$svc" in
-                haraka|haraka-*)
-                  HARAKA_SERVICE_FOUND=1
-                  ;;
-              esac
-            done
-
-            if [ "$HARAKA_SERVICE_FOUND" -eq 1 ]; then
-              OVERRIDE_FILE="$(mktemp)"
-              {
-                echo "services:"
-                for svc in $SERVICES; do
-                  case "$svc" in
-                    haraka|haraka-*)
-                      echo "  $svc:"
-                      echo "    image: ${TARGET_IMAGE}:${TARGET_TAG}"
-                      ;;
-                  esac
-                done
-              } > "$OVERRIDE_FILE"
-              COMPOSE_FILES="${COMPOSE_BASE_FILE}:${OVERRIDE_FILE}"
-              echo "Injected Haraka image override:"
-              cat "$OVERRIDE_FILE"
-            fi
-
-            echo "Resolved compose images:"
-            IMAGES_FILE="$(mktemp)"
-            if COMPOSE_FILE="$COMPOSE_FILES" compose config --images >"$IMAGES_FILE" 2>/dev/null; then
-              sed 's/^/  - /' "$IMAGES_FILE"
-              rm -f "$IMAGES_FILE"
-            else
-              rm -f "$IMAGES_FILE"
-              echo "  (docker compose version does not support 'config --images')"
-            fi
-
-            echo "Deploying services: $SERVICES"
-            COMPOSE_FILE="$COMPOSE_FILES" HARAKA_IMAGE_TAG="$TARGET_TAG" compose pull $SERVICES
-            COMPOSE_FILE="$COMPOSE_FILES" HARAKA_IMAGE_TAG="$TARGET_TAG" compose up -d $SERVICES
-            if [ -n "$OVERRIDE_FILE" ]; then rm -f "$OVERRIDE_FILE"; fi
+            export HARAKA_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+            export HARAKA_IMAGE_TAG="${{ github.sha }}"
+            deploy_cmd ./scripts/deploy/docker_deploy.sh

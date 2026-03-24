@@ -19,6 +19,21 @@ cp .env.example .env
 ./start.sh
 ```
 
+## Same-server setup
+
+For a single-host deployment beside the main Elektrine stack:
+
+```bash
+cp .env.same-server.example .env
+# edit .env
+../scripts/deploy/docker_deploy.sh
+```
+
+This uses `docker-compose.same-server.yml`, publishes `25` and `587`, binds the
+Haraka HTTP API to `127.0.0.1:18080`, and reads certificates from the main
+Elektrine Caddy volume. It also joins the main Elektrine Docker network so
+Haraka can call `http://elektrine_app:8080` directly.
+
 ## Useful Commands
 
 ```bash
