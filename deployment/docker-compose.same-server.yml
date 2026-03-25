@@ -141,7 +141,12 @@ services:
     command: >
       sh -c "
         while true; do
-          if [ -f /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$$HARAKA_DOMAIN/$$HARAKA_DOMAIN.crt ]; then
+          if [ -f /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/wildcard_.elektrine.com/wildcard_.elektrine.com.crt ]; then
+            cp /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/wildcard_.elektrine.com/wildcard_.elektrine.com.crt /ssl-certs/cert.crt
+            cp /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/wildcard_.elektrine.com/wildcard_.elektrine.com.key /ssl-certs/cert.key
+            chmod 644 /ssl-certs/cert.crt
+            chmod 600 /ssl-certs/cert.key
+          elif [ -f /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$$HARAKA_DOMAIN/$$HARAKA_DOMAIN.crt ]; then
             cp /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$$HARAKA_DOMAIN/$$HARAKA_DOMAIN.crt /ssl-certs/cert.crt
             cp /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$$HARAKA_DOMAIN/$$HARAKA_DOMAIN.key /ssl-certs/cert.key
             chmod 644 /ssl-certs/cert.crt
