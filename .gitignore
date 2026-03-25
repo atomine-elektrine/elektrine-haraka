@@ -104,3 +104,15 @@ npm-debug.log*
 # Backups
 *.bak
 *~
+# Local environment files
+.env.*
+deployment/.env
+deployment/.env.*
+!deployment/.env.example
+!deployment/.env.*.example
+
+# Local DKIM material
+config/dkim.backup*/
+config/dkim/
+/config/dkim/
+/config/dkim.backup*/
