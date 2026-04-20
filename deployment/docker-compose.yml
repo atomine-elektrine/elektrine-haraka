@@ -27,6 +27,7 @@ services:
     restart: unless-stopped
     networks:
       - haraka-network
+      - main-app-network
     depends_on:
       - redis
       - clamav
@@ -71,6 +72,7 @@ services:
     restart: unless-stopped
     networks:
       - haraka-network
+      - main-app-network
     depends_on:
       - redis
     deploy:
@@ -87,8 +89,8 @@ services:
 
   haraka-outbound:
     image: ${HARAKA_IMAGE:-ghcr.io/atomine-elektrine/elektrine-haraka}:${HARAKA_IMAGE_TAG:-latest}
-    expose:
-      - "8080"
+    ports:
+      - "127.0.0.1:${HARAKA_HTTP_BIND_PORT:-18080}:8080"
     volumes:
       - ../logs:/app/logs
       - ../config:/app/config
@@ -112,6 +114,7 @@ services:
     restart: unless-stopped
     networks:
       - haraka-network
+      - main-app-network
     depends_on:
       - redis
     deploy:
@@ -157,6 +160,7 @@ services:
     restart: unless-stopped
     networks:
       - haraka-network
+      - main-app-network
     depends_on:
       - redis
 
@@ -277,6 +281,9 @@ services:
 networks:
   haraka-network:
     driver: bridge
+  main-app-network:
+    external: true
+    name: ${MAIN_APP_NETWORK:-docker_elektrine_network}
 
 volumes:
   redis-data:
