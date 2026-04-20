@@ -21,10 +21,63 @@ escape_sed() {
   printf '%s' "$1" | sed 's/[\/&]/\\&/g'
 }
 
+trim_value() {
+  printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+append_domain() {
+  candidate="$(trim_value "$1")"
+  [ -n "$candidate" ] || return 0
+
+  case " $BOOTSTRAP_DKIM_DOMAINS " in
+    *" $candidate "*) ;;
+    *) BOOTSTRAP_DKIM_DOMAINS="$BOOTSTRAP_DKIM_DOMAINS $candidate" ;;
+  esac
+}
+
+generate_dkim_private_key() {
+  domain="$1"
+  domain_dir="$2"
+  private_path="$domain_dir/private"
+  selector_path="$domain_dir/selector"
+
+  [ -f "$private_path" ] && [ -f "$selector_path" ] && return 0
+
+  mkdir -p "$domain_dir"
+
+  if [ ! -f "$private_path" ]; then
+    openssl genrsa -out "$private_path" 2048 >/dev/null 2>&1
+    chmod 600 "$private_path"
+  fi
+
+  if [ ! -f "$selector_path" ]; then
+    printf 'default\n' > "$selector_path"
+    chmod 644 "$selector_path"
+  fi
+
+  echo "Generated DKIM key for $domain" >&2
+}
+
 HARAKA_DOMAIN_VALUE="${HARAKA_DOMAIN:-mail.example.com}"
 PHOENIX_WEBHOOK_URL_VALUE="${PHOENIX_WEBHOOK_URL:-}"
 PHOENIX_VERIFY_URL_VALUE="${PHOENIX_VERIFY_URL:-}"
 PHOENIX_DOMAINS_URL_VALUE="${PHOENIX_DOMAINS_URL:-}"
+PRIMARY_DOMAIN_VALUE="${PRIMARY_DOMAIN:-}"
+EMAIL_DOMAIN_VALUE="${EMAIL_DOMAIN:-}"
+SUPPORTED_DOMAINS_VALUE="${SUPPORTED_DOMAINS:-${EMAIL_SUPPORTED_DOMAINS:-}}"
+BOOTSTRAP_DKIM_DOMAINS=""
+
+append_domain "$PRIMARY_DOMAIN_VALUE"
+append_domain "$EMAIL_DOMAIN_VALUE"
+
+if [ -n "$SUPPORTED_DOMAINS_VALUE" ]; then
+  OLD_IFS="$IFS"
+  IFS=','
+  for raw_domain in $SUPPORTED_DOMAINS_VALUE; do
+    append_domain "$raw_domain"
+  done
+  IFS="$OLD_IFS"
+fi
 
 sed -i "s/example\.com/$(escape_sed "$HARAKA_DOMAIN_VALUE")/g" "$RUNTIME_CONFIG_DIR/elektrine.ini"
 sed -i "s/app\.example\.com/host.docker.internal/g" "$RUNTIME_CONFIG_DIR/auth_proxy.ini"
@@ -53,6 +106,10 @@ if [ -n "$PERSISTENT_DKIM_DIR" ]; then
 fi
 
 if [ -d "$RUNTIME_CONFIG_DIR/dkim" ]; then
+  for domain in $BOOTSTRAP_DKIM_DOMAINS; do
+    generate_dkim_private_key "$domain" "$RUNTIME_CONFIG_DIR/dkim/$domain"
+  done
+
   for key_file in "$RUNTIME_CONFIG_DIR"/dkim/*.key; do
     [ -f "$key_file" ] || break
     domain="$(basename "$key_file" .key)"
