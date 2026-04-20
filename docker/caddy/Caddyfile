@@ -7,12 +7,10 @@
     output file /data/access.log
   }
 
-  # API endpoints
+  # Internal API endpoints are not exposed through the public Haraka Caddy edge.
   @api path /api/*
   handle @api {
-    reverse_proxy {$HARAKA_HTTP_UPSTREAM:haraka-outbound:8080} {
-      header_up X-Real-IP {remote_host}
-    }
+    respond "Forbidden" 403
   }
 
   # Status/health endpoints restricted by CIDR
