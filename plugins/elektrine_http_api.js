@@ -123,7 +123,7 @@ exports.handle_request = function(req, res) {
     if (allowed_origin) {
         res.setHeader('Access-Control-Allow-Origin', allowed_origin);
     }
-    res.setHeader('Access-Control-Allow-Methods', 'POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key');
 
     // Handle preflight
@@ -161,6 +161,10 @@ exports.handle_request = function(req, res) {
         });
     }
 
+    if (route.kind === 'dkim_get') {
+        return plugin.process_dkim_get_request(route.domain, res);
+    }
+
     if (route.kind === 'dkim_delete') {
         return plugin.process_dkim_delete_request(route.domain, res);
     }
@@ -173,6 +177,10 @@ exports.resolve_api_route = function(method, request_path) {
 
     const dkim_domain = this.get_dkim_domain_from_path(request_path);
     if (!dkim_domain) return null;
+
+    if (method === 'GET') {
+        return { kind: 'dkim_get', domain: dkim_domain };
+    }
 
     if (method === 'PUT') {
         return { kind: 'dkim_upsert', domain: dkim_domain };
@@ -588,6 +596,28 @@ exports.process_dkim_delete_request = function(domain, res) {
     }
 };
 
+exports.process_dkim_get_request = function(domain, res) {
+    const plugin = this;
+
+    try {
+        const dkim_domain = plugin.read_dkim_domain(domain);
+        return plugin.send_response(res, 200, {
+            success: true,
+            domain,
+            selector: dkim_domain.selector,
+            public_key: dkim_domain.public_key_pem,
+            value: dkim_domain.value,
+            private_key_present: true
+        });
+    } catch (err) {
+        const not_found = err && err.code === 'ENOENT';
+        return plugin.send_response(res, not_found ? 404 : 500, {
+            success: false,
+            error: not_found ? `DKIM key not found for ${domain}` : `Failed to read DKIM key: ${err.message}`
+        });
+    }
+};
+
 exports.upsert_dkim_domain = function(domain, selector, private_key) {
     const storage_dir = this.get_dkim_storage_dir();
     const domain_dir = path.join(storage_dir, domain);
@@ -609,6 +639,34 @@ exports.delete_dkim_domain = function(domain) {
 
     fs.rmSync(domain_dir, { recursive: true, force: true });
     return true;
+};
+
+exports.read_dkim_domain = function(domain) {
+    const domain_dir = path.join(this.get_dkim_storage_dir(), domain);
+    const private_path = path.join(domain_dir, 'private');
+    const selector_path = path.join(domain_dir, 'selector');
+
+    const private_key = fs.readFileSync(private_path, 'utf8');
+    const selector = String(fs.readFileSync(selector_path, 'utf8') || '').trim();
+    const public_key = this.derive_public_key_from_private(private_key);
+
+    return {
+        selector,
+        private_key,
+        public_key_pem: public_key.pem,
+        public_key_dns: public_key.dns,
+        value: `v=DKIM1; k=rsa; p=${public_key.dns}`
+    };
+};
+
+exports.derive_public_key_from_private = function(private_key) {
+    const private_object = crypto.createPrivateKey({ key: private_key, format: 'pem' });
+    const public_object = crypto.createPublicKey(private_object);
+
+    const pem = public_object.export({ type: 'spki', format: 'pem' }).toString();
+    const dns = public_object.export({ type: 'spki', format: 'der' }).toString('base64');
+
+    return { pem, dns };
 };
 
 exports.atomic_write_file = function(target_path, contents, mode) {
