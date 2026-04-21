@@ -88,11 +88,11 @@ Common optional settings:
 - `haraka-submission`: authenticated submission on `587`
 - `haraka-outbound`: internal HTTP service on `8080`
 - `haraka-worker`: Redis consumer that delivers to Phoenix
-- `redis`, `clamav`, `spamassassin`, `caddy`, `cert-copier`: supporting services
+- `redis`, `clamav`, and `spamassassin`: supporting services in the default deployment
 
 ## HTTP API
 
-Caddy terminates TLS and proxies requests to `haraka-outbound`.
+The HTTP API is served by `haraka-outbound` on port `8080`.
 
 - `POST /api/v1/send`
 - `GET /status`

@@ -164,54 +164,6 @@ services:
     depends_on:
       - redis
 
-  caddy:
-    image: ${CADDY_IMAGE:-caddy:2-alpine}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ../docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    environment:
-      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-mail.example.com}
-      - HARAKA_HTTP_UPSTREAM=${HARAKA_HTTP_UPSTREAM:-haraka-outbound:8080}
-      - "METRICS_ALLOWED_CIDRS=${METRICS_ALLOWED_CIDRS:-}"
-      - "OPS_ALLOWED_CIDRS=${OPS_ALLOWED_CIDRS:-}"
-    restart: unless-stopped
-    networks:
-      - haraka-network
-    depends_on:
-      - haraka-outbound
-
-  cert-copier:
-    image: ${CERT_COPIER_IMAGE:-alpine:3.20}
-    volumes:
-      - caddy-data:/caddy-data:ro
-      - ssl-certs:/ssl-certs
-    environment:
-      - HARAKA_DOMAIN=${HARAKA_DOMAIN:-mail.example.com}
-    command: >
-      sh -c "
-        while true; do
-          if [ -f /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$$HARAKA_DOMAIN/$$HARAKA_DOMAIN.crt ]; then
-            echo 'Copying SSL certificates for Haraka...'
-            cp /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$$HARAKA_DOMAIN/$$HARAKA_DOMAIN.crt /ssl-certs/cert.crt
-            cp /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$$HARAKA_DOMAIN/$$HARAKA_DOMAIN.key /ssl-certs/cert.key
-            chown 1000:1000 /ssl-certs/cert.crt /ssl-certs/cert.key || true
-            chmod 644 /ssl-certs/cert.crt
-            chmod 600 /ssl-certs/cert.key
-            echo 'SSL certificates copied successfully'
-          fi
-          sleep 30
-        done
-      "
-    networks:
-      - haraka-network
-    depends_on:
-      - caddy
-    restart: unless-stopped
-
   redis:
     image: ${REDIS_IMAGE:-redis:7-alpine}
     command:
@@ -287,8 +239,6 @@ networks:
 
 volumes:
   redis-data:
-  caddy-data:
-  caddy-config:
   ssl-certs:
   clamav-data:
   spamassassin-data:
