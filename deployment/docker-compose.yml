@@ -128,7 +128,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "require('http').get('http://127.0.0.1:8080/status', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+          "const key = process.env.HARAKA_HTTP_API_KEY || process.env.HARAKA_API_KEY || ''; const req = require('http').request('http://127.0.0.1:8080/status', { headers: key ? { 'x-api-key': key } : {} }, (res) => process.exit(res.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1)); req.end();"
         ]
       interval: 30s
       timeout: 10s
@@ -176,8 +176,8 @@ services:
     environment:
       - HARAKA_DOMAIN=${HARAKA_DOMAIN:-mail.example.com}
       - HARAKA_HTTP_UPSTREAM=${HARAKA_HTTP_UPSTREAM:-haraka-outbound:8080}
-      - "METRICS_ALLOWED_CIDRS=${METRICS_ALLOWED_CIDRS:-127.0.0.1/32 ::1/128}"
-      - "OPS_ALLOWED_CIDRS=${OPS_ALLOWED_CIDRS:-127.0.0.1/32 ::1/128}"
+      - "METRICS_ALLOWED_CIDRS=${METRICS_ALLOWED_CIDRS:-}"
+      - "OPS_ALLOWED_CIDRS=${OPS_ALLOWED_CIDRS:-}"
     restart: unless-stopped
     networks:
       - haraka-network

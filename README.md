@@ -101,7 +101,8 @@ Caddy terminates TLS and proxies requests to `haraka-outbound`.
 
 `POST /api/v1/send` requires `X-API-Key: <HARAKA_HTTP_API_KEY>`.
 
-`/status`, `/healthz`, and `/metrics` are CIDR-restricted.
+`/status`, `/healthz`, and `/metrics` accept `X-API-Key: <HARAKA_HTTP_API_KEY>` by default.
+`OPS_ALLOWED_CIDRS` and `METRICS_ALLOWED_CIDRS` are optional and allow keyless access for trusted networks.
 
 ## Useful commands
 

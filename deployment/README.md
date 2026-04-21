@@ -63,7 +63,8 @@ curl -s https://your-domain/metrics
 - SMTP API traffic is terminated by Caddy and proxied to `haraka-outbound:8080`.
 - Inbound SMTP processing is async: accept fast on `haraka-inbound`, parse/deliver from `haraka-worker`.
 - Submission uses native Haraka outbound delivery (no smarthost file required).
-- `/status`, `/healthz`, and `/metrics` are CIDR-restricted by Caddy (configure in `.env`).
+- `/status`, `/healthz`, and `/metrics` accept `X-API-Key` by default.
+- Set `OPS_ALLOWED_CIDRS` and `METRICS_ALLOWED_CIDRS` in `.env` only if you also want keyless access from trusted networks.
 - Use immutable `HARAKA_IMAGE_TAG` values for reproducible rollouts.
 - Override `HARAKA_IMAGE` in `.env` if you need to pull from a different registry/repo.
 - `HARAKA_HTTP_UPSTREAM` controls where Caddy proxies the HTTP API:

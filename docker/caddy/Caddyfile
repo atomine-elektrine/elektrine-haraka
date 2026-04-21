@@ -13,38 +13,19 @@
     respond "Forbidden" 403
   }
 
-  # Status/health endpoints restricted by CIDR
-  @ops_allowed {
-    path /status /healthz
-    remote_ip {$OPS_ALLOWED_CIDRS:127.0.0.1/32 ::1/128}
-  }
-
+  # Status, health, and metrics auth is enforced by Haraka itself.
   @ops path /status /healthz
 
-  handle @ops_allowed {
-    reverse_proxy {$HARAKA_HTTP_UPSTREAM:haraka-outbound:8080} {
-      header_up X-Real-IP {remote_host}
-    }
-  }
-
   handle @ops {
-    respond "Forbidden" 403
-  }
-
-  # Metrics endpoint restricted by CIDR
-  @metrics_allowed {
-    path /metrics
-    remote_ip {$METRICS_ALLOWED_CIDRS:127.0.0.1/32 ::1/128}
-  }
-
-  handle @metrics_allowed {
     reverse_proxy {$HARAKA_HTTP_UPSTREAM:haraka-outbound:8080} {
       header_up X-Real-IP {remote_host}
     }
   }
 
   handle /metrics {
-    respond "Forbidden" 403
+    reverse_proxy {$HARAKA_HTTP_UPSTREAM:haraka-outbound:8080} {
+      header_up X-Real-IP {remote_host}
+    }
   }
 
   # Default response for other paths
