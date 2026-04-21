@@ -458,6 +458,10 @@ exports.get_client_ip = function(req) {
 
 exports.is_ops_request_allowed = function(req, path) {
     const plugin = this;
+    if (plugin.is_internal_api_request_authenticated(req)) {
+        return true;
+    }
+
     const client_ip = plugin.get_client_ip(req);
     const allowlist = path === '/metrics'
         ? plugin.allowlists.metrics
@@ -468,6 +472,12 @@ exports.is_ops_request_allowed = function(req, path) {
         plugin.logwarn(`Denied ${path} request from ${client_ip || 'unknown'}`);
     }
     return allowed;
+};
+
+exports.is_internal_api_request_authenticated = function(req) {
+    const api_key = this.get_header_value(req, 'x-api-key');
+    const expected_key = this.cfg.http_api_key || '';
+    return this.constant_time_equal(api_key, expected_key);
 };
 
 exports.get_dkim_domain_from_path = function(request_path) {
