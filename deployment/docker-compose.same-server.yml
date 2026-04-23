@@ -36,9 +36,6 @@ services:
 
   haraka-submission:
     image: ${HARAKA_IMAGE:-ghcr.io/atomine-elektrine/elektrine-haraka}:${HARAKA_IMAGE_TAG:-latest}
-    ports:
-      - "587:587"
-      - "465:465"
     volumes:
       - ../logs:/app/logs
       - ../config:/app/config
