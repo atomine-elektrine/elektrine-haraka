@@ -791,6 +791,14 @@ exports.message_body_summary = function(email_content) {
     return `message_bytes=${Buffer.byteLength(email_content)} body_bytes=${Buffer.byteLength(body)} body_hash=${hash}`;
 };
 
+exports.ensure_terminal_crlf = function(email_content) {
+    if (typeof email_content !== 'string' || email_content.endsWith('\r\n')) {
+        return email_content;
+    }
+
+    return email_content.replace(/\r?\n?$/, '') + '\r\n';
+};
+
 exports.queue_email = function(email_data, callback) {
     const plugin = this;
     
@@ -819,6 +827,8 @@ exports.queue_email = function(email_data, callback) {
             email_content = built.email_content;
             sender_email = built.sender_email;
         }
+
+        email_content = plugin.ensure_terminal_crlf(email_content);
 
         plugin.loginfo(`Queued outbound MIME summary ${plugin.message_body_summary(email_content)}`);
 
