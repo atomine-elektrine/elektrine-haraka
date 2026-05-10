@@ -6,7 +6,7 @@
     "haraka-plugin-dkim": "^1.0.11",
     "haraka-plugin-spf": "^1.2.10",
     "iconv": "^3.0.1",
-    "mailparser": "^3.7.4",
+    "mailparser": "^3.9.8",
     "redis": "^4.7.0"
   },
   "scripts": {

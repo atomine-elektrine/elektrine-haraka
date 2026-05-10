@@ -712,6 +712,20 @@ exports.process_send_request = function(body, res) {
                 error: 'Missing required field: subject (required for non-raw emails)' 
             });
         }
+
+        if (!email_data.raw && !email_data.raw_base64 && !plugin.has_structured_content(email_data)) {
+            plugin.logwarn(
+                `Rejecting structured send with no body or attachments from=${plugin.redact_email(email_data.from)} to_count=${emailBuilder.collect_recipients(email_data).length}`
+            );
+            return plugin.send_response(res, 400, {
+                success: false,
+                error: 'Missing message body: set text_body, text, body, html_body, html, attachments, raw, or raw_base64'
+            });
+        }
+
+        plugin.loginfo(
+            `HTTP send payload summary ${plugin.payload_summary(email_data)}`
+        );
         
         // Queue email for delivery
         plugin.queue_email(email_data, (err, message_id) => {
@@ -727,6 +741,54 @@ exports.process_send_request = function(body, res) {
     } catch (e) {
         plugin.send_response(res, 400, { success: false, error: 'Invalid JSON' });
     }
+};
+
+exports.has_structured_content = function(email_data) {
+    const body_fields = ['text_body', 'text', 'body', 'html_body', 'html'];
+    const has_body = body_fields.some((field) => {
+        const value = email_data[field];
+        return typeof value === 'string' && value.trim() !== '';
+    });
+
+    if (has_body) return true;
+
+    return Array.isArray(email_data.attachments) && email_data.attachments.length > 0;
+};
+
+exports.redact_email = function(value) {
+    const email = domains.extract_email(String(value || '').replace(/[\r\n]+/g, ' ').trim());
+    if (!email || !email.includes('@')) return '<invalid>';
+
+    const [local, domain] = email.split('@');
+    return `${local.slice(0, 2)}***@${domain}`;
+};
+
+exports.payload_summary = function(email_data) {
+    return [
+        `from=${this.redact_email(email_data.from)}`,
+        `to_count=${emailBuilder.collect_recipients(email_data).length}`,
+        `text_body_bytes=${this.string_size(email_data.text_body)}`,
+        `text_bytes=${this.string_size(email_data.text)}`,
+        `body_bytes=${this.string_size(email_data.body)}`,
+        `html_body_bytes=${this.string_size(email_data.html_body)}`,
+        `html_bytes=${this.string_size(email_data.html)}`,
+        `raw_bytes=${this.string_size(email_data.raw)}`,
+        `raw_base64_bytes=${this.string_size(email_data.raw_base64)}`,
+        `attachments=${Array.isArray(email_data.attachments) ? email_data.attachments.length : 0}`
+    ].join(' ');
+};
+
+exports.string_size = function(value) {
+    return typeof value === 'string' ? Buffer.byteLength(value) : 0;
+};
+
+exports.message_body_summary = function(email_content) {
+    const separator = '\r\n\r\n';
+    const index = email_content.indexOf(separator);
+    const body = index >= 0 ? email_content.slice(index + separator.length) : '';
+    const canonical = body.replace(/(\r\n)*$/, '') + '\r\n';
+    const hash = crypto.createHash('sha256').update(canonical, 'binary').digest('base64');
+    return `message_bytes=${Buffer.byteLength(email_content)} body_bytes=${Buffer.byteLength(body)} body_hash=${hash}`;
 };
 
 exports.queue_email = function(email_data, callback) {
@@ -757,6 +819,8 @@ exports.queue_email = function(email_data, callback) {
             email_content = built.email_content;
             sender_email = built.sender_email;
         }
+
+        plugin.loginfo(`Queued outbound MIME summary ${plugin.message_body_summary(email_content)}`);
 
         if (!/^[^\s@<>]+@[A-Za-z0-9.-]+$/.test(sender_email)) {
             throw new Error('Invalid from address');

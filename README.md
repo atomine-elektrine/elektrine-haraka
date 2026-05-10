@@ -215,6 +215,8 @@ domain.
 - `421` or other temporary inbound failures: check Redis, `haraka-inbound`, and `haraka-worker` logs.
 - Mail is accepted but never reaches Elektrine: check worker logs and `elektrine:inbound:dlq` depth.
 - Outbound mail has an empty body: check the `POST /api/v1/send` payload contains `text_body`, `text`, `body`, `html_body`, or `html`; then check `haraka-outbound` logs.
+- `ENETUNREACH ... :25` for IPv6 MX targets: this stack defaults outbound delivery to IPv4 first with `inet_prefer=v4` because many Docker hosts do not have working outbound IPv6.
+- `ERR_TLS_CERT_ALTNAME_INVALID` on the internal `haraka-inbound` hop: local-domain routing disables STARTTLS for that container hop because the Docker hostname does not match the public certificate.
 - Outbound delivery is rejected for authentication: verify `HARAKA_HTTP_API_KEY` matches Elektrine's Haraka API key.
 - Recipient verification fails: verify `PHOENIX_VERIFY_URL`, `PHOENIX_DOMAINS_URL`, and `PHOENIX_API_KEY`.
 - TLS issues: check the `ssl-certs` volume and same-server certificate copier logs.
