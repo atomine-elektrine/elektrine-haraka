@@ -535,6 +535,9 @@ exports.get_dkim_storage_dir = function() {
     const configured = String(this.cfg.dkim_storage_dir || '').trim();
     if (configured) return configured;
 
+    const haraka_dir = String(process.env.HARAKA || '').trim();
+    if (haraka_dir) return path.resolve(haraka_dir, 'config', 'dkim');
+
     const runtime_dir = '/tmp/haraka-config/config/dkim';
     if (fs.existsSync(runtime_dir)) {
         return runtime_dir;
