@@ -115,7 +115,9 @@ if [ -d "$RUNTIME_CONFIG_DIR/dkim" ]; then
     domain="$(basename "$key_file" .key)"
     domain_dir="$RUNTIME_CONFIG_DIR/dkim/$domain"
     mkdir -p "$domain_dir"
-    cp "$key_file" "$domain_dir/private"
+    if [ ! -f "$domain_dir/private" ]; then
+      cp "$key_file" "$domain_dir/private"
+    fi
     if [ ! -f "$domain_dir/selector" ]; then
       printf 'default\n' > "$domain_dir/selector"
     fi
